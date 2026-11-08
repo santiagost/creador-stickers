@@ -1,0 +1,17 @@
+# Gradle / Android Studio
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Spike descartable (resultados documentados en docs/specs/001-estaticos-whatsapp.md, Anexo A)
+spike-pack-update/
+
+# Claves y entorno
+*.jks
+*.keystore
+.env
