@@ -84,7 +84,13 @@ Para cambios triviales (typo, ajuste de texto, bug evidente de una línea) no ha
 - **Requisitos de stickers (verificar contra la doc actual antes de implementar):** WebP 512x512; estáticos ≤ 100 KB; animados ≤ 500 KB, hasta 10 s, mín. 8 ms por frame; packs de 3 a 30 stickers con ícono de bandeja PNG 96x96 ≤ 50 KB; no se mezclan estáticos y animados en un pack; subir la versión del pack al cambiarlo.
 - **Decisión de UX tomada:** "pack personal que se va llenando": cada sticker nuevo se suma al pack actual (con bump de versión) y al llegar a 30 se crea otro pack. Packs estáticos y animados separados.
 - **Hoja de ruta:** 1) estáticos + integración WhatsApp + pack que se llena; 2) quitar fondo con ML Kit; 3) animados.
-- **Comandos:** (completar: build, tests, lint; por ejemplo `./gradlew assembleDebug`, `./gradlew test`, `./gradlew lint`).
+- **Comandos** (en Windows, `.\gradlew.bat` en lugar de `./gradlew`; requieren JDK 17 y `local.properties` con `sdk.dir`):
+  - Build: `./gradlew assembleDebug` (APK en `app/build/outputs/apk/debug/`).
+  - Tests unitarios (JVM): `./gradlew test`.
+  - Tests instrumentados (teléfono conectado por USB): `./gradlew connectedAndroidTest`.
+  - Lint: `./gradlew lint`.
+  - Instalar en el teléfono: `./gradlew installDebug` (o `adb install -r <apk>`; `adb` está en `%LOCALAPPDATA%\Android\Sdk\platform-tools`).
+- **Versiones de build:** AGP 9.4.1 (el máximo que soporta Android Studio 2026.1.4), Gradle 9.6.1, Kotlin 2.4.21 (Kotlin integrado en AGP 9, sin `kotlin-android`), Compose BOM 2026.09.00 (exige `compileSdk 37`). Al subir AGP, verificar la tabla de compatibilidad con la versión de Android Studio instalada.
 
 ### Primer pedido
 Siguiendo el flujo de arriba, empezá por el paso 0 y el paso 1 para la hoja de ruta, parte 1 (estáticos + integración con WhatsApp + pack que se llena). No escribas código hasta que apruebe el plan.
