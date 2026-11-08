@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Android 11+: para ver si WhatsApp está instalado y consultar su whitelist (D7: solo WhatsApp común). -->
+    <queries>
+        <package android:name="com.whatsapp" />
+    </queries>
+
     <!-- D12: sin backup por ahora. En Android 11 alcanza con allowBackup="false" (no hace falta
          fullBackupContent); en 12+ las reglas de extracción excluyen también la transferencia entre equipos. -->
     <application

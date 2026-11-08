@@ -225,7 +225,7 @@ Diseño visual: Material 3 por defecto, sin trabajo de diseño propio en esta pa
 | P1 | Modelo + repositorio de packs (JSON, contadores, RN-3 a RN-10, RN-14), lógica de estado de sync (RN-7/RN-8). | Unitarios en JVM con carpeta temporal. | AC-6 a AC-9, AC-12, AC-14, AC-16 a AC-18 (lógica) |
 | P2 | Generación de sticker y tray: transformación del encuadre → bitmap 512 → WebP ≤ 100 KB; PNG 96. | Unitarios para el cálculo del encuadre; instrumentados en el teléfono para tamaño/formato/transparencia. | AC-2 a AC-4, AC-19 |
 | P3 | ContentProvider. | Instrumentados: consultas por `ContentResolver`, columnas, rechazo de archivos no listados. | AC-20 a AC-22 |
-| P4 | Integración WhatsApp: intent, resultado, whitelist, estado en onResume. | Unitarios para interpretar resultados; prueba manual en el teléfono. | AC-10, AC-11, AC-13 a AC-15 |
+| P4 | Integración WhatsApp: intent, resultado, whitelist, estado de cada pack (`packStatuses`). | Unitarios para interpretar resultados y estados; instrumentados para el intent y la consulta al WhatsApp real. La prueba manual de agregar/actualizar pasa a P5, porque sin la UI no hay forma de crear stickers. | AC-10, AC-11, AC-13 a AC-15 (lógica) |
 | P5 | UI: Inicio, Photo Picker, encuadre, borrar. | Prueba manual guiada por los ACs. | AC-1, AC-5, AC-8, AC-16, AC-17 |
 | P6 | Verificación completa en el S20 FE contra todos los ACs; actualizar spec; borrar el spike (con OK). | Guion manual. | Todos |
 
