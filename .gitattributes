@@ -1,0 +1,9 @@
+# Saltos de línea: LF en el repo; los scripts conservan el formato que necesita su sistema.
+* text=auto
+gradlew text eol=lf
+*.bat text eol=crlf
+
+# Binarios
+*.jar binary
+*.png binary
+*.webp binary

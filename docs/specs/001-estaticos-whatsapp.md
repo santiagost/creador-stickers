@@ -77,7 +77,7 @@ Hacer stickers propios para WhatsApp a partir de fotos, rápido y sin anuncios. 
   - **Sin agregar**: WhatsApp dice que no lo tiene (whitelist = 0 o sin respuesta).
   - **Al día**: WhatsApp lo tiene y `versión actual == última versión confirmada`.
   - **Para actualizar**: WhatsApp lo tiene y `versión actual > última versión confirmada`.
-- **RN-8** La "última versión confirmada" se guarda **solo** cuando WhatsApp devuelve `RESULT_OK` con `add_successful=true` al intent. Cancelar no la cambia.
+- **RN-8** La "última versión confirmada" se guarda **solo** cuando WhatsApp devuelve `RESULT_OK` con `add_successful=true` al intent. Cancelar no la cambia. Se guarda la versión **con la que se envió** el intent, no la actual: si se sumó un sticker mientras el diálogo de WhatsApp estaba abierto, el pack sigue "Para actualizar".
 - **RN-9** El estado se recalcula al volver a la app (onResume), consultando a WhatsApp (whitelist), porque el usuario pudo quitar el pack desde WhatsApp.
 - **RN-10** Borrar: un pack que **alguna vez** se agregó a WhatsApp no puede quedar con menos de 3 stickers. Un pack nunca agregado puede quedar con menos; si queda vacío, se elimina.
 - **RN-11** El ícono de bandeja (PNG 96×96, ≤ 50 KB) se genera del primer sticker del pack; si se borra ese sticker, se regenera del nuevo primero (cuenta como cambio, RN-5).
