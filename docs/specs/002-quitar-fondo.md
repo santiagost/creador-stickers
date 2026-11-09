@@ -54,6 +54,7 @@ Hoy un sticker es un recorte cuadrado de la foto, con su fondo. Para que parezca
 | D9 | Se quita el fondo de la foto entera ya decodificada (lado largo ≤ 2048), antes de encuadrar. El resultado se guarda en memoria mientras dura el encuadre: apagar y prender no reprocesa. | Una sola pasada de ML Kit (~300 ms) y el encuadre sigue funcionando igual. | Santi (2026-11-09) |
 | D10 | Al apagar "Quitar fondo" se conserva el encuadre actual. | Si el usuario ya ajustó, no pierde lo hecho. | Santi (2026-11-09) |
 | D11 | El spike (`spike-quitar-fondo/`) no se versiona; se borra al terminar la parte 2 (con OK de Santi). | Igual que en la parte 1. | Santi (2026-11-09) |
+| D13 | Se quitan del manifest los permisos `INTERNET` y `ACCESS_NETWORK_STATE` que agrega ML Kit (`tools:node="remove"`). La app sigue sin acceso a la red. | Solo sirven para mandar métricas de uso a Google; el modelo lo baja Play services. | Santi (2026-11-09) |
 | D12 | Los tests instrumentados de quitar fondo usan fotos de Santi guardadas en `app/src/androidTest/assets/fondo/` (quedan en el repo de GitHub). | Con imágenes sintéticas no está garantizado que ML Kit detecte un sujeto. | Santi (2026-11-09) |
 
 ## 5. Reglas de negocio
@@ -112,12 +113,14 @@ Encuadre (foto original, "Quitar fondo" apagado)
 
 **Integración**
 - **AC-13** Un sticker con fondo quitado se suma al pack y se agrega/actualiza en WhatsApp igual que cualquier otro (prueba manual).
+- **AC-14** Dado que la app no tiene permisos de red (D13), cuando quito el fondo de una foto con sujeto, entonces funciona igual.
 
 ## 8. Seguridad, permisos y privacidad
 
 - No se agregan permisos. La foto se procesa en el teléfono; ni la app ni ML Kit la suben (según la doc de ML Kit, el procesamiento es on-device).
-- ML Kit corre dentro de Google Play services, bajo sus términos. **No verificado:** si Play services envía métricas de uso de la API a Google.
-- El modelo lo baja Play services, no la app (la app no gana permiso de internet).
+- ML Kit corre dentro de Google Play services, bajo sus términos.
+- **Hallazgo de P0 (verificado en el manifest final):** la dependencia de ML Kit trae `com.google.android.datatransport` (`transport-backend-cct` y `transport-runtime`), que agrega los permisos `INTERNET` y `ACCESS_NETWORK_STATE`. Es el canal con el que las librerías de Google mandan métricas de uso. Se quitan (D13): verificado en el manifest final que la app no tiene permisos de red. **Pendiente verificar en P2** que quitar fondo funciona sin ellos (AC-14).
+- El modelo lo baja Play services en su propio proceso, no la app.
 - El resultado sin fondo vive en memoria mientras dura el encuadre; no se guarda en disco salvo el sticker final (como en la parte 1, D13).
 
 ## 9. Modelo de datos
@@ -157,9 +160,9 @@ Sin cambios en Inicio.
 
 | Parte | Contenido | Tests | ACs |
 |---|---|---|---|
-| P0 | Dependencia de ML Kit, `meta-data` del modelo, `.gitignore` para spikes. | Build, tests y lint en verde. | — |
+| P0 | Dependencia de ML Kit, `meta-data` del modelo, quitar permisos de red (D13), `.gitignore` para spikes. | Build, tests y lint en verde; manifest final sin permisos de red. | — |
 | P1 | `CropMath.fitBox` y `CropMath.magnet`. | Unitarios en la PC. | AC-8 a AC-12 (cálculo), RN-5 |
-| P2 | `BackgroundRemover` con ML Kit. | Instrumentados en el teléfono con las fotos de prueba de D12. | AC-2, AC-4, AC-5 (parte técnica) |
+| P2 | `BackgroundRemover` con ML Kit. | Instrumentados en el teléfono con las fotos de prueba de D12. | AC-2, AC-4, AC-5, AC-14 (parte técnica) |
 | P3 | UI: botón, estados, mensajes, imán conectado a los gestos. | Prueba manual guiada por los ACs. | AC-1 a AC-13 |
 | P4 | Auditoría, verificación completa, cierre de la spec, borrar el spike (con OK). | Todos los tests + guion manual. | Todos |
 
@@ -176,7 +179,7 @@ Sin cambios en Inicio.
 
 ## 14. Preguntas abiertas
 
-Ninguna. Las tres del borrador quedaron resueltas (sección 15).
+Ninguna. Las tres del borrador y la P4 surgida en P0 (permiso de internet de ML Kit) quedaron resueltas (sección 15).
 
 ## 15. Historial de comentarios
 
@@ -193,6 +196,7 @@ Ninguna. Las tres del borrador quedaron resueltas (sección 15).
 | 2026-11-09 | P2 (fotos de prueba): "Te cargo fotos mias" | Nueva D12: fotos de Santi en `app/src/androidTest/assets/fondo/`. |
 | 2026-11-09 | P3 (encuadre al apagar): "Si, conservarlo" | D10 confirmada. |
 | 2026-11-09 | "Sí, aprobada" | Estado: aprobada. Spec commiteada; empieza la implementación. |
+| 2026-11-09 | P4 (permiso de internet que agrega ML Kit, surgida en P0): "Sí, quitalo" | Nueva D13; sección 8 actualizada; nuevo AC-14 para verificarlo en P2. |
 
 ---
 

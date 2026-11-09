@@ -8,6 +8,9 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Spikes descartables (sus resultados van a la spec correspondiente)
+spike-*/
+
 # Claves y entorno
 *.jks
 *.keystore

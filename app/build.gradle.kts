@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.mlkit.subject.segmentation)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
