@@ -87,7 +87,11 @@ Para cambios triviales (typo, ajuste de texto, bug evidente de una línea) no ha
 - **Comandos** (en Windows, `.\gradlew.bat` en lugar de `./gradlew`; requieren JDK 17 y `local.properties` con `sdk.dir`):
   - Build: `./gradlew assembleDebug` (APK en `app/build/outputs/apk/debug/`).
   - Tests unitarios (JVM): `./gradlew test`.
-  - Tests instrumentados (teléfono conectado por USB): `./gradlew connectedAndroidTest`.
+  - Tests instrumentados (teléfono conectado por USB), **sin** borrar los stickers del teléfono:
+    `./gradlew installDebug installDebugAndroidTest` y después
+    `adb shell am instrument -w com.santi.stickers.test/androidx.test.runner.AndroidJUnitRunner`.
+    **No usar `./gradlew connectedAndroidTest`**: al terminar desinstala la app y se pierden todos los stickers
+    guardados (pasó el 2026-11-09; se restauraron desde una copia).
   - Lint: `./gradlew lint`.
   - Instalar en el teléfono: `./gradlew installDebug` (o `adb install -r <apk>`; `adb` está en `%LOCALAPPDATA%\Android\Sdk\platform-tools`).
 - **Versiones de build:** AGP 9.4.1 (el máximo que soporta Android Studio 2026.1.4), Gradle 9.6.1, Kotlin 2.4.21 (Kotlin integrado en AGP 9, sin `kotlin-android`), Compose BOM 2026.09.00 (exige `compileSdk 37`). Al subir AGP, verificar la tabla de compatibilidad con la versión de Android Studio instalada.

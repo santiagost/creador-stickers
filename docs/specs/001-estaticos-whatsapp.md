@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Estado** | Aprobada por Santi el 2026-11-08 (borrador del 2026-11-06). |
+| **Estado** | Implementada y verificada el 2026-11-09 (ver sección 16). Aprobada por Santi el 2026-11-08; borrador del 2026-11-06. |
 | **Componentes** | App Android nueva (repo `creador-stickers`, módulo único `app`). |
 | **Hoja de ruta** | Parte 1 de 3 (1: estáticos + WhatsApp; 2: quitar fondo; 3: animados). |
 | **Rama** | `feature/001-Estaticos_WhatsApp` desde `main`, después del commit inicial que hace Santi. |
@@ -213,7 +213,7 @@ Columnas de metadata: `sticker_pack_identifier`, `sticker_pack_name`, `sticker_p
 
 ## 11. Pantallas
 
-1. **Inicio**: un bloque por pack con nombre, `N/30`, estado (Sin agregar / Al día / Para actualizar) y el botón correspondiente ("Agregar a WhatsApp", "Actualizar en WhatsApp", o "Faltan N stickers" deshabilitado). Grilla de stickers. Botón flotante "+". Mantener apretado un sticker → diálogo "¿Borrar este sticker?". Estado vacío: "Creá tu primer sticker".
+1. **Inicio**: un bloque por pack con nombre, `N/30` y estado, con estos textos: "no está en WhatsApp" (Sin agregar), "al día en WhatsApp" (Al día), "hay cambios sin pasar a WhatsApp" (Para actualizar) y "todavía no se puede agregar" (menos de 3). Botón correspondiente: "Agregar a WhatsApp", "Actualizar en WhatsApp", "Faltan N stickers para WhatsApp" deshabilitado, o ninguno si está al día. Grilla de 4 columnas. Botón flotante "+ Nuevo sticker". Mantener apretado un sticker → diálogo "¿Borrar este sticker?". Estado vacío: "Creá tu primer sticker".
 2. **Encuadre**: foto a pantalla completa con un cuadro fijo; fuera del cuadro, oscurecido. Gestos de arrastrar y pellizcar. Fondo a cuadros dentro del cuadro para ver la transparencia. Botones "Cancelar" y "Guardar".
 
 Diseño visual: Material 3 por defecto, sin trabajo de diseño propio en esta parte.
@@ -228,9 +228,9 @@ Diseño visual: Material 3 por defecto, sin trabajo de diseño propio en esta pa
 | P3 | ContentProvider. | Instrumentados: consultas por `ContentResolver`, columnas, rechazo de archivos no listados. | AC-20 a AC-22 |
 | P4 | Integración WhatsApp: intent, resultado, whitelist, estado de cada pack (`packStatuses`). | Unitarios para interpretar resultados y estados; instrumentados para el intent y la consulta al WhatsApp real. La prueba manual de agregar/actualizar pasa a P5, porque sin la UI no hay forma de crear stickers. | AC-10, AC-11, AC-13 a AC-15 (lógica) |
 | P5 | UI: Inicio, Photo Picker, encuadre, borrar. | Prueba manual guiada por los ACs. | AC-1, AC-5, AC-8, AC-16, AC-17 |
-| P6 | Verificación completa en el S20 FE contra todos los ACs; actualizar spec; borrar el spike (con OK). | Guion manual. | Todos |
+| P6 | Auditoría, verificación completa contra todos los ACs (sección 16); actualizar spec; borrar el spike (con OK). | Todos los tests + guion manual de P5. | Todos |
 
-Comandos previstos: `./gradlew assembleDebug`, `./gradlew test`, `./gradlew connectedAndroidTest` (con el teléfono conectado), `./gradlew lint`.
+Comandos: ver CLAUDE.md. Los tests instrumentados se corren con `am instrument`, no con `connectedAndroidTest`, porque este último desinstala la app y borra los stickers (sección 16).
 
 ## 13. Riesgos
 
@@ -259,6 +259,43 @@ Ninguna. Las cinco preguntas del borrador quedaron resueltas (ver sección 15).
 | 2026-11-08 | "La spec ya estaria aprobada" | Estado: aprobada. D1 se da por confirmada con la aprobación. |
 | 2026-11-08 | "la idea de usar un pack hasta que se llene y luego ahi se crea otro podria ser para la primera version pero luego que este la opcion de crear packs aunque otros no esten llenos" | Nueva D15 y nueva línea en "No entra" (sección 3). Sin cambios en reglas ni criterios de esta versión. |
 | 2026-11-09 | Al probar P5: "Si, de momento dejamos esta ui, cuando agregemos el agregador de stickers y ya quede bien con casi todas las funcionalidades podes mejorar/cambiar la ui" | UI de P5 confirmada y commiteada. El rediseño queda en "No entra" (sección 3) para más adelante. |
+| 2026-11-09 | "te confirmo la elimacion de la spike" | Carpeta `spike-pack-update/` borrada y quitada del `.gitignore`. |
+
+## 16. Verificación (P6, 2026-11-09)
+
+Entorno: Samsung S20 FE (SM-G780G), Android 13, WhatsApp 2.26.42.74. 44 tests unitarios (PC) y 17 instrumentados (teléfono), todos en verde. Prueba manual de Santi con el guion de P5 (2026-11-08).
+
+| AC | Test automático | Prueba manual |
+|---|---|---|
+| AC-1 | `CropMathTest` (cover) | Sí: arranca centrada y cubriendo |
+| AC-2 | `CropMathTest`, `StickerImagesTest.ac2` | Sí: se guarda lo que estaba en el cuadro |
+| AC-3 | `StickerImagesTest.ac3` | Sí: s2.webp quedó con 30 % transparente y las esquinas en alfa 0 (analizado en la PC) |
+| AC-4 | `StickerImagesTest.ac4` (12 MP de ruido) | Sí: archivos reales de 12 a 54 KB, 512×512 |
+| AC-5 | — (solo UI) | Sí: cancelar selector y encuadre no cambia nada |
+| AC-6, AC-7, AC-9 | `PackRepositoryTest` | AC-6 sí; AC-7 no (requiere 31 stickers) |
+| AC-8 | `PackRepositoryTest` (lógica) | No: el mensaje requiere 300 stickers |
+| AC-10 | `SyncStateTest` | No confirmado explícitamente |
+| AC-11, AC-13 | `AddPackOutcomeTest`, `SyncStateTest`, `WhatsAppTest` | Sí: agregar y "Update" funcionan |
+| AC-12 | `SyncStateTest` | Sí |
+| AC-14 | `AddPackOutcomeTest`, `SyncStateTest` | Con la app real no; en el spike, sí (Anexo A) |
+| AC-15 | `PackStatusTest` | Sí |
+| AC-16, AC-17 | `PackRepositoryTest` | Sí |
+| AC-18 | `PackRepositoryTest` | No |
+| AC-19 | `PackRepositoryTest` (lógica), `StickerImagesTest` (ícono real) | No |
+| AC-20, AC-21, AC-22 | `StickerContentProviderTest` | AC-20 y AC-22: WhatsApp leyó el pack y la actualización |
+
+**Correcciones de la auditoría:**
+- Al consultar el estado varias veces seguidas, una respuesta vieja podía pisar a una nueva: ahora se cancela la consulta anterior.
+- Si se cancelaba una foto mientras cargaba y se elegía otra, la primera podía aparecer: ahora se cancela la carga anterior.
+- El pedido a WhatsApp tomaba la versión que mostraba la pantalla, que podía estar atrasada justo después de guardar o borrar: ahora la relee del disco, así RN-8 confirma la versión real.
+
+**Incidente:** `./gradlew connectedAndroidTest` desinstala la app al terminar. Al correrlo en P6 se borraron los 4 stickers de la prueba de Santi; se restauraron desde la copia hecha el 2026-11-08 para revisar la transparencia. CLAUDE.md documenta ahora la forma segura (`installDebug installDebugAndroidTest` + `am instrument`), que se verificó: 17 tests OK y los stickers siguen.
+
+**No verificado:**
+- AC-7, AC-8, AC-18, AC-19 y AC-10 en la UI (cubiertos por tests de lógica).
+- La UI no tiene tests automáticos (AC-5 solo manual).
+- Otros teléfonos, otras versiones de WhatsApp, WhatsApp Business (fuera de alcance, D7).
+- Lint: quedan 2 avisos aceptados (AGP más nuevo disponible, a propósito; sugerencia de estilo `UseKtx`).
 
 ---
 

@@ -23,6 +23,7 @@ import com.santi.stickers.whatsapp.AddPackOutcome
 import com.santi.stickers.whatsapp.AddPackRequest
 import com.santi.stickers.whatsapp.WhatsApp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -60,9 +61,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Lo enviado a WhatsApp, a la espera de su respuesta (RN-8 confirma esta versión). */
     private var pendingRequest: AddPackRequest? = null
 
-    /** RN-9: se llama al volver a la app. Consulta a WhatsApp en segundo plano. */
+    private var refreshJob: Job? = null
+    private var cropJob: Job? = null
+
+    /**
+     * RN-9: se llama al volver a la app y después de cada cambio. Consulta a WhatsApp en segundo plano.
+     * Cancela la consulta anterior para que una respuesta vieja no pise a una nueva.
+     */
     fun refresh() {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val context = getApplication<Application>()
             home = withContext(Dispatchers.IO) {
                 val index = repository.load()
@@ -90,8 +98,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startCrop(uri: Uri) {
+        cropJob?.cancel() // si quedaba otra foto cargando, que no aparezca después
         screen = Screen.Crop(photo = null)
-        viewModelScope.launch {
+        cropJob = viewModelScope.launch {
             val context = getApplication<Application>()
             val photo = withContext(Dispatchers.IO) {
                 runCatching { StickerImages.decode(ImageDecoder.createSource(context.contentResolver, uri)) }
@@ -110,7 +119,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** AC-5. */
     fun cancelCrop() {
-        if (!saving) screen = Screen.Home
+        if (saving) return
+        cropJob?.cancel()
+        screen = Screen.Home
     }
 
     /** AC-2 a AC-4: genera el WebP con lo que está dentro del cuadro y lo suma al pack (RN-3). */
@@ -171,7 +182,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             message("WhatsApp no está instalado.")
             return null
         }
-        val pack = status.pack
+        // Se relee del disco (index.json es chico): la pantalla puede mostrar una versión anterior
+        // si se acaba de guardar o borrar un sticker, y RN-8 tiene que confirmar la versión real.
+        val pack = repository.load().packs.firstOrNull { it.identifier == status.pack.identifier } ?: return null
         if (!pack.canSendToWhatsApp) return null
         return AddPackRequest(pack.identifier, pack.name, pack.imageDataVersion).also { pendingRequest = it }
     }
