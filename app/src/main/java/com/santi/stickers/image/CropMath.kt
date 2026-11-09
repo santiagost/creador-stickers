@@ -1,5 +1,6 @@
 package com.santi.stickers.image
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -59,15 +60,79 @@ object CropMath {
         val limits = zoomLimits(imageWidth, imageHeight, frameSize)
         val scale = (t.scale * zoom).coerceIn(limits.min, limits.max)
         val k = scale / t.scale
-        val halfW = imageWidth * scale / 2f
-        val halfH = imageHeight * scale / 2f
         val offsetX = centroidX - (centroidX - t.offsetX) * k + panX
         val offsetY = centroidY - (centroidY - t.offsetY) * k + panY
+        return keepCenterInFrame(CropTransform(scale, offsetX, offsetY), imageWidth, imageHeight, frameSize)
+    }
+
+    /** Regla común a gestos y encuadre automático: el centro de la foto no sale del cuadro. */
+    private fun keepCenterInFrame(t: CropTransform, imageWidth: Int, imageHeight: Int, frameSize: Float): CropTransform {
+        val halfW = imageWidth * t.scale / 2f
+        val halfH = imageHeight * t.scale / 2f
+        return t.copy(
+            offsetX = (t.offsetX + halfW).coerceIn(0f, frameSize) - halfW,
+            offsetY = (t.offsetY + halfH).coerceIn(0f, frameSize) - halfH,
+        )
+    }
+
+    /** Caja en píxeles de la foto (por ejemplo, la del sujeto que devuelve quitar fondo). */
+    data class Box(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+        val width get() = right - left
+        val height get() = bottom - top
+    }
+
+    /** Spec 002, RN-5: la caja entra entera en el cuadro, centrada, con [margin] de margen por lado. */
+    fun fitBox(box: Box, imageWidth: Int, imageHeight: Int, frameSize: Float, margin: Float = 0.05f): CropTransform {
+        val limits = zoomLimits(imageWidth, imageHeight, frameSize)
+        val scale = (frameSize * (1 - 2 * margin) / max(box.width, box.height)).coerceIn(limits.min, limits.max)
+        val t = CropTransform(
+            scale = scale,
+            offsetX = frameSize / 2 - (box.left + box.right) / 2 * scale,
+            offsetY = frameSize / 2 - (box.top + box.bottom) / 2 * scale,
+        )
+        return keepCenterInFrame(t, imageWidth, imageHeight, frameSize)
+    }
+
+    /**
+     * Spec 002, RN-8 a RN-11: devuelve lo que se ve a partir de la posición "real" del dedo ([raw]).
+     * - Escala: a menos de [scaleTolerance] de ancho justo o alto justo, se pega (sin mover el centro de la foto).
+     * - Posición, por eje: a menos de [snapDistance] (en píxeles del cuadro) de un borde alineado, o del centro
+     *   si la foto es más chica que el cuadro, se pega.
+     * Como [raw] se sigue acumulando aparte, la foto se despega recién al pasar el umbral (imán "duro").
+     */
+    fun magnet(
+        raw: CropTransform,
+        imageWidth: Int,
+        imageHeight: Int,
+        frameSize: Float,
+        snapDistance: Float,
+        scaleTolerance: Float = 0.06f,
+    ): CropTransform {
+        val fits = listOf(frameSize / imageWidth, frameSize / imageHeight)
+        val target = fits.minBy { abs(raw.scale / it - 1f) }
+        val scale = if (abs(raw.scale / target - 1f) <= scaleTolerance) target else raw.scale
+
+        // Cambiar la escala sin mover el centro de la foto.
+        val centerX = raw.offsetX + imageWidth * raw.scale / 2f
+        val centerY = raw.offsetY + imageHeight * raw.scale / 2f
+        val offsetX = centerX - imageWidth * scale / 2f
+        val offsetY = centerY - imageHeight * scale / 2f
+
         return CropTransform(
             scale = scale,
-            offsetX = (offsetX + halfW).coerceIn(0f, frameSize) - halfW,
-            offsetY = (offsetY + halfH).coerceIn(0f, frameSize) - halfH,
+            offsetX = snapAxis(offsetX, imageWidth * scale, frameSize, snapDistance),
+            offsetY = snapAxis(offsetY, imageHeight * scale, frameSize, snapDistance),
         )
+    }
+
+    private fun snapAxis(offset: Float, size: Float, frameSize: Float, snapDistance: Float): Float {
+        val candidates = buildList {
+            add(0f) // borde inicial alineado
+            add(frameSize - size) // borde final alineado
+            if (size < frameSize) add((frameSize - size) / 2f) // centrada
+        }
+        val nearest = candidates.minBy { abs(it - offset) }
+        return if (abs(nearest - offset) <= snapDistance) nearest else offset
     }
 
     /**
