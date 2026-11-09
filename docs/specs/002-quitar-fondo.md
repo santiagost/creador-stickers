@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Estado** | Aprobada por Santi el 2026-11-09. |
+| **Estado** | Implementada y verificada el 2026-11-09 (sección 16). Aprobada por Santi el 2026-11-09. |
 | **Componentes** | App Android (`app`): pantalla de encuadre, cálculo del encuadre, nuevo módulo de quitar fondo. No toca packs, provider ni WhatsApp. |
 | **Hoja de ruta** | Parte 2 de 3 (1: estáticos + WhatsApp, hecha; 2: quitar fondo; 3: animados). |
 | **Rama** | `feature/002-Quitar_fondo` desde `main` (`073cd9f`). |
@@ -201,6 +201,32 @@ Ninguna. Las tres del borrador y la P4 surgida en P0 (permiso de internet de ML 
 | 2026-11-09 | P4 (permiso de internet que agrega ML Kit, surgida en P0): "Sí, quitalo" | Nueva D13; sección 8 actualizada; nuevo AC-14 para verificarlo en P2. |
 | 2026-11-09 | Prueba de P3, punto 7: "Cuando la imagen ocupa todo el cuadro se siente bien, cuando, cuando no hay fondo en una arte del cuadro se siente medio raro porque la imagen va queriendo pegarse en los costados o arriba" | RN-9: si la foto no llena el cuadro en un eje, solo se pega al centro. Test actualizado. |
 | 2026-11-09 | Después del ajuste: "Se siente bien" | UI de P3 confirmada y commiteada; umbrales iniciales (±6 %, 24 dp) se quedan. |
+
+## 16. Verificación (P4, 2026-11-09)
+
+Entorno: Samsung S20 FE (SM-G780G), Android 13, WhatsApp 2.26.42.74. 57 tests unitarios (PC) y 24 instrumentados (teléfono, con `am instrument`, sin borrar los stickers), todos en verde. Prueba manual de Santi con el guion de P3.
+
+| AC | Test automático | Prueba manual |
+|---|---|---|
+| AC-1 | — (solo UI) | Sí |
+| AC-2 | `BackgroundRemoverTest` (con sujeto) | Sí: quita el fondo en menos de 2 s y queda centrado |
+| AC-3 | — (solo UI) | Sí: al apagar conserva el encuadre; al prender vuelve a centrar |
+| AC-4 | `BackgroundRemoverTest.ac4` (WebP 512 ≤ 100 KB, esquinas transparentes) | Sí: el sticker se ve igual que en la app |
+| AC-5 | `BackgroundRemoverTest.ac5` (imagen plana) | Sí: aparece el mensaje |
+| AC-6 | — | No: requiere un teléfono sin Play services o sin el modelo |
+| AC-7 | — (solo UI) | Sí: cancelar mientras quita el fondo vuelve sin guardar |
+| AC-8 a AC-11 | `MagnetAndFitTest` | Sí: se pega y se despega; ajustado RN-9 tras la prueba |
+| AC-12 | `MagnetAndFitTest` (aplicar el imán dos veces da lo mismo) | Sí, implícito: el sticker guardado coincide con lo que se veía |
+| AC-13 | — | Sí: sticker sin fondo en el pack y en WhatsApp |
+| AC-14 | `BackgroundRemoverTest` corre con la app sin permisos de red | Sí: quitar fondo funcionó en la app sin permisos de red |
+
+**Auditoría:** se revisó todo el cambio de la rama contra la spec (sin código muerto ni registros de depuración). El manifest final sigue sin permisos de red (D13).
+
+**No verificado:**
+- AC-6 (ML Kit no disponible): solo por código; el mensaje no se vio en un teléfono real.
+- El contraste del botón "Fondo quitado" con los colores del sistema (texto blanco sobre el color de selección): no se revisó con captura.
+- Fotos de cámara de 12 MP con quitar fondo (las pruebas usaron fotos de hasta 1600 px), otros teléfonos.
+- Lint: siguen los 2 avisos aceptados (AGP más nuevo disponible; sugerencia de estilo `UseKtx`).
 
 ---
 
