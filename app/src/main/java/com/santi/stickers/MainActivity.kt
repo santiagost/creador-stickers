@@ -86,8 +86,10 @@ private fun App(viewModel: MainViewModel) {
             onDelete = viewModel::deleteSticker,
         )
         is Screen.Crop -> CropScreen(
-            photo = screen.photo,
+            state = screen,
             saving = viewModel.saving,
+            snackbar = snackbar,
+            onToggleBackground = viewModel::toggleBackground,
             onCancel = viewModel::cancelCrop,
             onSave = viewModel::saveSticker,
         )

@@ -70,7 +70,7 @@ Hoy un sticker es un recorte cuadrado de la foto, con su fondo. Para que parezca
 
 **Encuadre con imán** (umbrales iniciales, D5)
 - **RN-8** Escala: si el zoom queda a menos de ±6 % de "ancho justo" (el ancho de la foto ocupa el cuadro) o de "alto justo", se pega a ese valor.
-- **RN-9** Posición, por eje: si un borde de la foto queda a menos de 24 dp del borde del cuadro, se pega al borde; si la foto es más chica que el cuadro en ese eje y queda a menos de 24 dp del centro, se pega al centro.
+- **RN-9** Posición, por eje: si la foto llena el cuadro en ese eje y un borde de la foto queda a menos de 24 dp del borde del cuadro, se pega al borde; si la foto es más chica que el cuadro en ese eje, solo se pega al centro (a menos de 24 dp), nunca a los bordes de adentro.
 - **RN-10** El imán es "duro": mientras el dedo siga moviendo la foto, la posición real se sigue acumulando, y recién se despega cuando supera el umbral. Por eso una foto vertical a ancho justo se puede mover de arriba a abajo sin correrse de costado.
 - **RN-11** Lo que se guarda es lo que se ve (la posición pegada), no la posición "real" del dedo.
 
@@ -199,6 +199,8 @@ Ninguna. Las tres del borrador y la P4 surgida en P0 (permiso de internet de ML 
 | 2026-11-09 | P3 (encuadre al apagar): "Si, conservarlo" | D10 confirmada. |
 | 2026-11-09 | "Sí, aprobada" | Estado: aprobada. Spec commiteada; empieza la implementación. |
 | 2026-11-09 | P4 (permiso de internet que agrega ML Kit, surgida en P0): "Sí, quitalo" | Nueva D13; sección 8 actualizada; nuevo AC-14 para verificarlo en P2. |
+| 2026-11-09 | Prueba de P3, punto 7: "Cuando la imagen ocupa todo el cuadro se siente bien, cuando, cuando no hay fondo en una arte del cuadro se siente medio raro porque la imagen va queriendo pegarse en los costados o arriba" | RN-9: si la foto no llena el cuadro en un eje, solo se pega al centro. Test actualizado. |
+| 2026-11-09 | Después del ajuste: "Se siente bien" | UI de P3 confirmada y commiteada; umbrales iniciales (±6 %, 24 dp) se quedan. |
 
 ---
 

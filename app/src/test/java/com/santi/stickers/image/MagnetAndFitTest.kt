@@ -120,13 +120,14 @@ class MagnetAndFitTest {
     }
 
     @Test
-    fun `RN-9 si la foto es mas chica que el cuadro se pega al centro o a los bordes`() {
+    fun `RN-9 si la foto es mas chica que el cuadro solo se pega al centro, no a los bordes de adentro`() {
         // Escala 0.15 (lejos de ancho y alto justo): 150x300 dentro de 500.
         val centro = magnet(CropTransform(0.15f, offsetX = 180f, offsetY = 110f))
         assertEquals((frame - 150f) / 2, centro.offsetX, eps)
         assertEquals((frame - 300f) / 2, centro.offsetY, eps)
-        val borde = magnet(CropTransform(0.15f, offsetX = 10f, offsetY = 100f))
-        assertEquals(0f, borde.offsetX, eps)
+        val cercaDelBorde = magnet(CropTransform(0.15f, offsetX = 10f, offsetY = 190f))
+        assertEquals("no se pega al borde izquierdo", 10f, cercaDelBorde.offsetX, eps)
+        assertEquals("no se pega al borde inferior", 190f, cercaDelBorde.offsetY, eps)
     }
 
     @Test

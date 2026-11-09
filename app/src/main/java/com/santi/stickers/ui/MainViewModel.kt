@@ -16,8 +16,11 @@ import com.santi.stickers.data.PackRules
 import com.santi.stickers.data.PackStatus
 import com.santi.stickers.data.Packs
 import com.santi.stickers.data.packStatuses
+import com.santi.stickers.image.BackgroundRemover
 import com.santi.stickers.image.CropMath
 import com.santi.stickers.image.CropTransform
+import com.santi.stickers.image.MlKitBackgroundRemover
+import com.santi.stickers.image.RemovalResult
 import com.santi.stickers.image.StickerImages
 import com.santi.stickers.whatsapp.AddPackOutcome
 import com.santi.stickers.whatsapp.AddPackRequest
@@ -33,8 +36,19 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data object Home : Screen
 
-    /** [photo] es null mientras se decodifica. */
-    data class Crop(val photo: Bitmap?) : Screen
+    /**
+     * [photo] es null mientras se decodifica. Spec 002: [removal] guarda el recorte ya calculado (D9),
+     * [showSubject] dice si "Quitar fondo" está prendido y [removing] si ML Kit está trabajando.
+     */
+    data class Crop(
+        val photo: Bitmap?,
+        val removal: RemovalResult.Removed? = null,
+        val showSubject: Boolean = false,
+        val removing: Boolean = false,
+    ) : Screen {
+        /** Lo que se ve y lo que se guarda (RN-7). */
+        val shown: Bitmap? get() = if (showSubject) removal?.subject else photo
+    }
 }
 
 data class HomeState(
@@ -63,6 +77,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var refreshJob: Job? = null
     private var cropJob: Job? = null
+    private var removeJob: Job? = null
+    private val backgroundRemover: BackgroundRemover = MlKitBackgroundRemover()
+
+    override fun onCleared() {
+        backgroundRemover.close()
+    }
 
     /**
      * RN-9: se llama al volver a la app y después de cada cambio. Consulta a WhatsApp en segundo plano.
@@ -99,7 +119,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startCrop(uri: Uri) {
         cropJob?.cancel() // si quedaba otra foto cargando, que no aparezca después
-        screen = Screen.Crop(photo = null)
+        removeJob?.cancel()
+        screen = Screen.Crop(photo = null) // RN-1 (spec 002): "Quitar fondo" arranca apagado
         cropJob = viewModelScope.launch {
             val context = getApplication<Application>()
             val photo = withContext(Dispatchers.IO) {
@@ -117,11 +138,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** AC-5. */
+    /** AC-5 (spec 001); AC-7 (spec 002): también corta un quitar fondo en curso. */
     fun cancelCrop() {
         if (saving) return
         cropJob?.cancel()
+        removeJob?.cancel()
         screen = Screen.Home
+    }
+
+    /** Spec 002, RN-1 a RN-6: prende o apaga "Quitar fondo". */
+    fun toggleBackground() {
+        val crop = screen as? Screen.Crop ?: return
+        val photo = crop.photo ?: return
+        when {
+            crop.removing -> Unit
+            crop.showSubject -> screen = crop.copy(showSubject = false) // RN-6
+            crop.removal != null -> screen = crop.copy(showSubject = true) // D9: sin reprocesar
+            else -> {
+                screen = crop.copy(removing = true)
+                removeJob = viewModelScope.launch {
+                    val result = backgroundRemover.remove(photo)
+                    val current = screen as? Screen.Crop
+                    if (current?.photo !== photo) return@launch // se eligió otra foto o se salió
+                    screen = when (result) {
+                        is RemovalResult.Removed -> current.copy(removal = result, showSubject = true, removing = false)
+                        RemovalResult.NoSubject -> {
+                            message("No encontré nada para recortar en esta foto.") // RN-3
+                            current.copy(removing = false)
+                        }
+                        is RemovalResult.Unavailable -> {
+                            message("No se pudo quitar el fondo ahora. La foto se puede usar igual.") // RN-4
+                            current.copy(removing = false)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /** AC-2 a AC-4: genera el WebP con lo que está dentro del cuadro y lo suma al pack (RN-3). */

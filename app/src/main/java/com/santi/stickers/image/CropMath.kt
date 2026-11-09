@@ -96,8 +96,8 @@ object CropMath {
     /**
      * Spec 002, RN-8 a RN-11: devuelve lo que se ve a partir de la posición "real" del dedo ([raw]).
      * - Escala: a menos de [scaleTolerance] de ancho justo o alto justo, se pega (sin mover el centro de la foto).
-     * - Posición, por eje: a menos de [snapDistance] (en píxeles del cuadro) de un borde alineado, o del centro
-     *   si la foto es más chica que el cuadro, se pega.
+     * - Posición, por eje: a menos de [snapDistance] (en píxeles del cuadro) se pega a un borde alineado si la foto
+     *   llena el cuadro en ese eje, o al centro si es más chica.
      * Como [raw] se sigue acumulando aparte, la foto se despega recién al pasar el umbral (imán "duro").
      */
     fun magnet(
@@ -126,11 +126,9 @@ object CropMath {
     }
 
     private fun snapAxis(offset: Float, size: Float, frameSize: Float, snapDistance: Float): Float {
-        val candidates = buildList {
-            add(0f) // borde inicial alineado
-            add(frameSize - size) // borde final alineado
-            if (size < frameSize) add((frameSize - size) / 2f) // centrada
-        }
+        // Si la foto llena el cuadro en este eje, se pega a los bordes (que no quede hueco).
+        // Si es más chica, solo al centro: pegarse a los bordes de adentro se sentía raro (prueba de Santi).
+        val candidates = if (size >= frameSize) listOf(0f, frameSize - size) else listOf((frameSize - size) / 2f)
         val nearest = candidates.minBy { abs(it - offset) }
         return if (abs(nearest - offset) <= snapDistance) nearest else offset
     }
