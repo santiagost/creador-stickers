@@ -201,6 +201,7 @@ Ninguna. Las tres del borrador y la P4 surgida en P0 (permiso de internet de ML 
 | 2026-11-09 | P4 (permiso de internet que agrega ML Kit, surgida en P0): "Sí, quitalo" | Nueva D13; sección 8 actualizada; nuevo AC-14 para verificarlo en P2. |
 | 2026-11-09 | Prueba de P3, punto 7: "Cuando la imagen ocupa todo el cuadro se siente bien, cuando, cuando no hay fondo en una arte del cuadro se siente medio raro porque la imagen va queriendo pegarse en los costados o arriba" | RN-9: si la foto no llena el cuadro en un eje, solo se pega al centro. Test actualizado. |
 | 2026-11-09 | Después del ajuste: "Se siente bien" | UI de P3 confirmada y commiteada; umbrales iniciales (±6 %, 24 dp) se quedan. |
+| 2026-11-09 | Sobre borrar el spike y desinstalar las apps de prueba: "Sí, borrá todo" | D11 cumplida: carpeta `spike-quitar-fondo/` borrada; app `com.santi.stickers.spike2` desinstalada del teléfono. La del spike de la parte 1 (`com.santi.stickers.spike`) ya no estaba instalada. |
 
 ## 16. Verificación (P4, 2026-11-09)
 
