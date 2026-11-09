@@ -73,6 +73,32 @@ object StickerImages {
         error("No se pudo bajar el sticker a $maxBytes bytes")
     }
 
+    /**
+     * Caja de los píxeles no transparentes (derecha e inferior exclusivas), o null si todo es transparente.
+     * Spec 002: detecta "sin sujeto" (RN-3) y da la caja para el encuadre automático (RN-5).
+     */
+    fun alphaBounds(bitmap: Bitmap): CropMath.Box? {
+        val w = bitmap.width
+        val row = IntArray(w)
+        var minX = w
+        var minY = -1
+        var maxX = -1
+        var maxY = -1
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(row, 0, w, 0, y, w, 1)
+            for (x in 0 until w) {
+                if (row[x] ushr 24 != 0) {
+                    if (minY < 0) minY = y
+                    maxY = y
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                }
+            }
+        }
+        if (maxX < 0) return null
+        return CropMath.Box(minX.toFloat(), minY.toFloat(), (maxX + 1).toFloat(), (maxY + 1).toFloat())
+    }
+
     /** RN-11: ícono de bandeja a partir del archivo de un sticker. Firma compatible con PackRepository. */
     fun trayPng(stickerFile: File): ByteArray {
         val bmp = ImageDecoder.decodeBitmap(ImageDecoder.createSource(stickerFile)) { decoder, _, _ ->

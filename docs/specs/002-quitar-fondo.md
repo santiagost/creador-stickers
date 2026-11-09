@@ -130,19 +130,21 @@ Sin cambios: el sticker sin fondo es un sticker estático más (spec 001, secci�
 ## 10. Interfaces
 
 ```kotlin
-/** D6: quitar fondo, intercambiable. */
-interface BackgroundRemover {
-    /** Pesado: llamar fuera del hilo principal. */
+/** D6: quitar fondo, intercambiable. Implementación: MlKitBackgroundRemover. */
+interface BackgroundRemover : Closeable {
+    /** Pesado (~300 ms): llamar desde una corrutina. */
     suspend fun remove(photo: Bitmap): RemovalResult
 }
 
 sealed interface RemovalResult {
-    /** [subject] tiene el tamaño de la foto; [bounds] es la caja del sujeto (alfa > 0). */
-    data class Removed(val subject: Bitmap, val bounds: Rect) : RemovalResult
+    /** [subject] tiene el tamaño de la foto; [bounds] es la caja del sujeto (alfa > 0), en píxeles de la foto. */
+    data class Removed(val subject: Bitmap, val bounds: CropMath.Box) : RemovalResult
     data object NoSubject : RemovalResult
     data class Unavailable(val reason: String) : RemovalResult
 }
 ```
+
+La caja usa `CropMath.Box` (sin Android) en lugar de `android.graphics.Rect`, para que `fitBox` se pueda probar en la PC. `StickerImages.alphaBounds` la calcula a partir del canal alfa.
 
 Cálculos nuevos en `CropMath` (sin Android, con tests en la PC): `fitBox(...)` para RN-5 y `magnet(...)` para RN-8 a RN-10.
 
