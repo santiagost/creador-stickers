@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono provisorio: un sticker con la esquina doblada. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,32 L70,32 Q76,32 76,38 L76,58 L58,76 L38,76 Q32,76 32,70 L32,38 Q32,32 38,32 Z" />
+    <path
+        android:fillColor="#D1C4E9"
+        android:pathData="M76,58 L64,58 Q58,58 58,64 L58,76 Z" />
+</vector>

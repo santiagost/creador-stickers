@@ -44,6 +44,7 @@ Hacer stickers propios para WhatsApp a partir de fotos, rápido y sin anuncios. 
 - Backup/exportación de stickers → backlog.
 - Publicación (Play Store, R8, App Bundle, donaciones, "Acerca de") → cuando se decida publicar.
 - Varios idiomas → backlog (la UI va en español).
+- Rediseño de la UI → cuando estén casi todas las funcionalidades (pedido de Santi, 2026-11-09). La parte 1 queda con Material 3 por defecto.
 
 ## 4. Decisiones
 
@@ -257,6 +258,7 @@ Ninguna. Las cinco preguntas del borrador quedaron resueltas (ver sección 15).
 | 2026-11-08 | P5: "SI" | D12 confirmada. |
 | 2026-11-08 | "La spec ya estaria aprobada" | Estado: aprobada. D1 se da por confirmada con la aprobación. |
 | 2026-11-08 | "la idea de usar un pack hasta que se llene y luego ahi se crea otro podria ser para la primera version pero luego que este la opcion de crear packs aunque otros no esten llenos" | Nueva D15 y nueva línea en "No entra" (sección 3). Sin cambios en reglas ni criterios de esta versión. |
+| 2026-11-09 | Al probar P5: "Si, de momento dejamos esta ui, cuando agregemos el agregador de stickers y ya quede bien con casi todas las funcionalidades podes mejorar/cambiar la ui" | UI de P5 confirmada y commiteada. El rediseño queda en "No entra" (sección 3) para más adelante. |
 
 ---
 
@@ -274,3 +276,5 @@ Samsung S20 FE (SM-G780G), Android 13, WhatsApp 2.26.42.74. App descartable con 
 | Reemitir con otro identificador | No se probó (no hizo falta). |
 
 No verificado: sincronización automática después de horas; comportamiento en otras versiones de WhatsApp u otros teléfonos.
+
+**Prueba de P5 con la app real (2026-11-08, mismo teléfono):** agregar, actualizar ("Update"), borrar con mínimo de 3 y cancelar funcionaron como dicen los ACs. Al **quitar el pack desde WhatsApp**, la app lo detecta enseguida ("no está en WhatsApp", AC-15), pero el panel de stickers de WhatsApp lo sigue mostrando, sin poder usarlo, hasta cerrar WhatsApp desde Recientes y volver a abrirlo. Es comportamiento de WhatsApp; la app no puede hacer nada al respecto.
