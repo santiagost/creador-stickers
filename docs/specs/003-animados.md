@@ -187,6 +187,7 @@ Ninguna. Las cuatro del borrador quedaron resueltas (sección 15).
 | 2026-11-10 | "Sí, aprobada" | Estado: aprobada. Spec commiteada; empieza la implementación. |
 | 2026-11-10 | Prueba de P3: "hubo un video de unos 40s que no lo pude generar osea cuaadno arrancaba el mensaje "Generando X%" llegaba al 100% y volvia al 40-50% aprox y nunca se generó" | Bug: webp-android no pisa un archivo existente y todos los intentos de la escalera (D6) medían el primero (675 KB los 6). Arreglo: borrar el archivo antes de cada intento; test nuevo `rn4_siElPrimerIntentoNoEntra_elSiguienteSeMideDeNuevo`. Con el mismo video (22 s, 528×352) entró en el segundo intento (490 KB). |
 | 2026-11-10 | Después del arreglo, sobre si commitear P3: "Sí, todo bien" | UI de P3 confirmada y commiteada. No quedó confirmado explícitamente un video grabado en vertical (se verifica en P4). |
+| 2026-11-10 | Sobre borrar el spike y pasar a main: "Sí, las dos cosas" | D11 cumplida: carpeta `spike-animados/` borrada y app `com.santi.stickers.spike3` desinstalada. Rama mergeada a `main` y subida a GitHub. |
 
 ## 16. Verificación (P4, 2026-11-10)
 
