@@ -161,7 +161,7 @@ object AnimatedWebp {
 | `webp-android` no está alineada a 16 KB: no sirve para publicar en Play Store ni para teléfonos con páginas de 16 KB. | Aceptado para uso personal; antes de publicar, compilar libwebp con el NDK (queda en "No entra"). |
 | `webp-android` tiene poca actividad (1.1.2, hace ~1 año, 22 estrellas). | Queda aislada detrás de `AnimatedWebp`; se puede cambiar por libwebp propio. |
 | La causa del cierre de la primera versión del spike no está confirmada. | D5: siempre convertir a `ARGB_8888`; test instrumentado con varios formatos de entrada. |
-| Videos de alta resolución o muy largos: memoria y tiempo. | Solo se leen los cuadros del tramo (≤ 45 a 15 fps) y se reducen a 512 al leerlos. |
+| Videos de alta resolución o muy largos: memoria y tiempo. | Solo se leen los cuadros del tramo (≤ 45 a 15 fps), en bloques que no pasan de 64 MB, y se reducen al tamaño de trabajo (lado largo ≤ 1024). Medido en P2 con el video de prueba (720p, 60 fps): 4,1 s para leer 45 cuadros y 7,6 s de video a sticker (439 KB). Con videos 1080p o 4K va a tardar más: no verificado. |
 | No verificado que WhatsApp haga cumplir el límite de 10 packs en total. | Se respeta igual (D8). |
 
 ## 14. Preguntas abiertas
