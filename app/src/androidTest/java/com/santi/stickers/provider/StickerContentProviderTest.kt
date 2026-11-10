@@ -100,6 +100,18 @@ class StickerContentProviderTest {
     }
 
     @Test
+    fun spec003_ac10_packAnimadoSeInformaComoAnimado() {
+        addStickers(3)
+        repeat(3) { assertTrue(repo.addSticker("anim-$it".toByteArray(), animated = true) is AddResult.Added) }
+
+        val rows = resolver.query(uri("metadata"), null, null, null, null)!!.rows {
+            str("sticker_pack_identifier") to int("animated_sticker_pack")
+        }
+
+        assertEquals(listOf("pack_1" to 0, "pack_2" to 1), rows)
+    }
+
+    @Test
     fun ac20_metadataDeUnPackPuntual() {
         addStickers(3)
         assertEquals(listOf("pack_1"), resolver.query(uri("metadata", "pack_1"), null, null, null, null)!!.rows { str("sticker_pack_identifier") })

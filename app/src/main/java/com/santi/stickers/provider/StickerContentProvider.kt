@@ -55,7 +55,7 @@ class StickerContentProvider : ContentProvider() {
                     "", "", "", "", "", "", // links y contacto: opcionales, no se usan (uso personal)
                     p.imageDataVersion.toString(),
                     0, // whatsapp_will_not_cache_stickers: deprecado, WhatsApp lo ignora desde 2.25.9.78
-                    0, // animated_sticker_pack: la parte 1 solo tiene estáticos
+                    if (p.animated) 1 else 0, // animated_sticker_pack (spec 003, RN-8)
                 ),
             )
         }

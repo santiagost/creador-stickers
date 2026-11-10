@@ -9,6 +9,7 @@ object PackRules {
     const val MAX_PACKS = 10 // RN-4 (límite de WhatsApp por app)
     const val DEFAULT_EMOJI = "😀" // RN-12, D6
     const val PACK_NAME_PREFIX = "Mis stickers " // D10
+    const val ANIMATED_PACK_NAME_PREFIX = "Mis animados " // spec 003, D8
     const val PUBLISHER = "Santi" // D10
 }
 
@@ -30,6 +31,8 @@ data class StickerPack(
     val lastConfirmedVersion: Int = 0,
     /** Si WhatsApp lo confirmó alguna vez (RN-10). */
     val everAdded: Boolean = false,
+    /** Spec 003, D10: pack de stickers animados. Los packs anteriores quedan en false. */
+    val animated: Boolean = false,
     val stickers: List<StickerEntry> = emptyList(),
 ) {
     val isFull: Boolean get() = stickers.size >= PackRules.MAX_STICKERS
