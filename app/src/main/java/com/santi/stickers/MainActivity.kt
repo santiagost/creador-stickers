@@ -26,6 +26,7 @@ import com.santi.stickers.ui.CropScreen
 import com.santi.stickers.ui.HomeScreen
 import com.santi.stickers.ui.MainViewModel
 import com.santi.stickers.ui.Screen
+import com.santi.stickers.ui.TrimScreen
 import com.santi.stickers.whatsapp.AddStickerPackContract
 
 class MainActivity : ComponentActivity() {
@@ -62,6 +63,10 @@ private fun App(viewModel: MainViewModel) {
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let(viewModel::startCrop)
     }
+    // Spec 003, AC-1: el mismo selector, solo videos.
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let(viewModel::startVideo)
+    }
     val sendToWhatsApp = rememberLauncherForActivityResult(AddStickerPackContract(), viewModel::onWhatsAppResult)
 
     when (val screen = viewModel.screen) {
@@ -69,9 +74,13 @@ private fun App(viewModel: MainViewModel) {
             state = viewModel.home,
             packDir = repository::packDir,
             snackbar = snackbar,
-            onNewSticker = {
-                viewModel.tryStartNewSticker {
-                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            onNewSticker = { animated ->
+                viewModel.tryStartNewSticker(animated) {
+                    if (animated) {
+                        pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                    } else {
+                        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
                 }
             },
             onSendToWhatsApp = { status ->
@@ -91,7 +100,15 @@ private fun App(viewModel: MainViewModel) {
             snackbar = snackbar,
             onToggleBackground = viewModel::toggleBackground,
             onCancel = viewModel::cancelCrop,
-            onSave = viewModel::saveSticker,
+            onSave = { photo, crop, frame ->
+                if (screen.video != null) viewModel.saveAnimated(crop, frame) else viewModel.saveSticker(photo, crop, frame)
+            },
+        )
+        is Screen.Trim -> TrimScreen(
+            state = screen,
+            onStartChange = viewModel::setTrimStart,
+            onCancel = viewModel::cancelTrim,
+            onNext = viewModel::confirmTrim,
         )
     }
 }

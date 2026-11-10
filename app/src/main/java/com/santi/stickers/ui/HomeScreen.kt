@@ -21,6 +21,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -54,7 +56,7 @@ fun HomeScreen(
     state: HomeState,
     packDir: (packId: String) -> File,
     snackbar: SnackbarHostState,
-    onNewSticker: () -> Unit,
+    onNewSticker: (animated: Boolean) -> Unit,
     onSendToWhatsApp: (PackStatus) -> Unit,
     onDelete: (packId: String, file: String) -> Unit,
 ) {
@@ -64,7 +66,15 @@ fun HomeScreen(
         topBar = { TopAppBar(title = { Text("Stickers") }) },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onNewSticker) { Text("+  Nuevo sticker") }
+            // Spec 003, AC-1: "Foto" o "Video".
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                ExtendedFloatingActionButton(onClick = { menu = true }) { Text("+  Nuevo sticker") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Foto") }, onClick = { menu = false; onNewSticker(false) })
+                    DropdownMenuItem(text = { Text("Video (animado)") }, onClick = { menu = false; onNewSticker(true) })
+                }
+            }
         },
     ) { padding ->
         when {
@@ -116,7 +126,10 @@ private fun PackCard(status: PackStatus, dir: File, onSend: () -> Unit, onLongPr
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(pack.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (pack.animated) "${pack.name} · animado" else pack.name, // spec 003, D8
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Text(
                         "${pack.stickers.size}/${PackRules.MAX_STICKERS} · ${statusText(status)}",
                         style = MaterialTheme.typography.bodySmall,

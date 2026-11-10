@@ -108,6 +108,21 @@ class AnimatedStickerTest {
     }
 
     @Test
+    fun rn4_siElPrimerIntentoNoEntra_elSiguienteSeMideDeNuevo() {
+        // Bug de la prueba de P3: todos los intentos medían el archivo del primero.
+        val frames = (0 until 45).map { moving(it) }
+        val first = AnimatedWebp.encode(context, frames, maxBytes = Int.MAX_VALUE, ladder = listOf(15 to 70f)) as AnimatedResult.Ok
+
+        val result = AnimatedWebp.encode(context, frames, maxBytes = first.bytes.size - 1, ladder = listOf(15 to 70f, 8 to 25f))
+
+        assertTrue("se esperaba Ok con el segundo escalón y vino $result", result is AnimatedResult.Ok)
+        result as AnimatedResult.Ok
+        assertEquals(8, result.fps)
+        assertTrue(result.bytes.size < first.bytes.size)
+        assertEquals(24, WebpAnimInfo.parse(result.bytes).frameDurations.size)
+    }
+
+    @Test
     fun ac7_siNoEntraEn500KB_devuelveTooBig() {
         val frames = (0 until 45).map { noise(it) }
         assertEquals(AnimatedResult.TooBig, AnimatedWebp.encode(context, frames))

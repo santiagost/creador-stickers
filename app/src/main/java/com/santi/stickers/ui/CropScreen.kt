@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -183,35 +184,44 @@ private fun CropArea(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilterChip(
-                selected = state.showSubject,
-                onClick = onToggleBackground,
-                enabled = !state.removing && !saving,
-                label = {
-                    Text(
-                        when {
-                            state.removing -> "Quitando fondo…"
-                            state.showSubject -> "Fondo quitado"
-                            else -> "Quitar fondo"
-                        },
-                        color = Color.White,
-                    )
-                },
-                leadingIcon = if (state.removing) {
-                    { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) }
-                } else {
-                    null
-                },
-            )
+            val generating = state.generating
+            when {
+                // Spec 003, AC-5: progreso de la generación del animado.
+                generating != null -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Generando sticker… ${(generating * 100).toInt()} %", color = Color.White)
+                    LinearProgressIndicator(progress = { generating }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+                // Spec 003, D3/D7: "Quitar fondo" no está para video.
+                state.video == null -> FilterChip(
+                    selected = state.showSubject,
+                    onClick = onToggleBackground,
+                    enabled = !state.removing && !saving,
+                    label = {
+                        Text(
+                            when {
+                                state.removing -> "Quitando fondo…"
+                                state.showSubject -> "Fondo quitado"
+                                else -> "Quitar fondo"
+                            },
+                            color = Color.White,
+                        )
+                    },
+                    leadingIcon = if (state.removing) {
+                        { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) }
+                    } else {
+                        null
+                    },
+                )
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onCancel, enabled = !saving, modifier = Modifier.weight(1f)) {
                     Text("Cancelar", color = Color.White)
                 }
                 Button(
                     onClick = { onSave(shown, crop, frame) }, // RN-7 y RN-11: se guarda lo que se ve
-                    enabled = !saving && !state.removing, // AC-7
+                    enabled = !saving && !state.removing && generating == null, // AC-7 (spec 002), AC-5 (spec 003)
                     modifier = Modifier.weight(1f),
-                ) { Text(if (saving) "Guardando…" else "Guardar") }
+                ) { Text(if (saving || generating != null) "Guardando…" else "Guardar") }
             }
         }
     }

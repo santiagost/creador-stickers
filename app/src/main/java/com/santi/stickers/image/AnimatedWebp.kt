@@ -3,6 +3,7 @@ package com.santi.stickers.image
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import com.aureusapps.android.webpandroid.encoder.WebPAnimEncoder
 import com.aureusapps.android.webpandroid.encoder.WebPAnimEncoderOptions
 import com.aureusapps.android.webpandroid.encoder.WebPConfig
@@ -25,6 +26,7 @@ sealed interface AnimatedResult {
 object AnimatedWebp {
     const val MAX_BYTES = 500 * 1024
     const val SIZE = CropMath.STICKER_SIZE
+    private const val TAG = "AnimatedWebp"
 
     /** D6: cuadros por segundo y calidad, de mejor a peor. */
     val LADDER = listOf(15 to 70f, 12 to 60f, 10 to 50f, 10 to 40f, 8 to 35f, 8 to 25f)
@@ -33,12 +35,20 @@ object AnimatedWebp {
      * Arma el sticker con [frames] a [VideoFrames.FPS] (ya a 512x512, ARGB_8888), bajando cuadros por segundo
      * y calidad hasta entrar en [MAX_BYTES] (RN-4, RN-5). Repetición infinita y cuadros de igual duración.
      */
-    fun encode(context: Context, frames: List<Bitmap>, onProgress: (Float) -> Unit = {}): AnimatedResult {
+    fun encode(
+        context: Context,
+        frames: List<Bitmap>,
+        maxBytes: Int = MAX_BYTES,
+        ladder: List<Pair<Int, Float>> = LADDER,
+        onProgress: (Float) -> Unit = {},
+    ): AnimatedResult {
         require(frames.size >= 2) { "Hacen falta al menos 2 cuadros" }
         val clipMs = frames.size * 1000L / VideoFrames.FPS
         val out = File(context.cacheDir, "anim-${System.nanoTime()}.webp")
         try {
-            for ((fps, quality) in LADDER) {
+            for ((fps, quality) in ladder) {
+                // webp-android no pisa un archivo que ya existe: sin esto, todos los intentos medían el primero.
+                out.delete()
                 val frameMs = 1000 / fps // 66, 83, 100 o 125 ms: siempre ≥ 8 ms
                 val n = (clipMs * fps / 1000).toInt().coerceAtLeast(2)
                 val picked = (0 until n).map { k -> frames[min(frames.size - 1, (k * VideoFrames.FPS / fps.toFloat()).roundToInt())] }
@@ -56,7 +66,8 @@ object AnimatedWebp {
                 } finally {
                     encoder.release()
                 }
-                if (out.length() in 1..MAX_BYTES.toLong()) return AnimatedResult.Ok(out.readBytes(), fps, quality)
+                Log.i(TAG, "intento $fps fps, calidad $quality: ${out.length() / 1024} KB, $n cuadros")
+                if (out.length() in 1..maxBytes.toLong()) return AnimatedResult.Ok(out.readBytes(), fps, quality)
             }
             return AnimatedResult.TooBig
         } finally {
