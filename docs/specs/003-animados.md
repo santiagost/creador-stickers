@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Estado** | Aprobada por Santi el 2026-11-10. |
+| **Estado** | Implementada y verificada el 2026-11-10 (sección 16). Aprobada por Santi el 2026-11-10. |
 | **Componentes** | App Android (`app`): modelo de packs, provider, nuevo módulo de video y WebP animado, pantallas de Inicio, tramo y encuadre. |
 | **Hoja de ruta** | Parte 3 de 3 (1: estáticos + WhatsApp; 2: quitar fondo; 3: animados). |
 | **Rama** | `feature/003-Animados` desde `main` (`04a64d9`). |
@@ -55,7 +55,7 @@ Hoy la app solo hace stickers quietos. Se quiere poder convertir un video corto 
 | D10 | El modelo suma `animated: Boolean = false` a cada pack. Los packs existentes quedan como estáticos, sin migración. | Cambio aditivo; `index.json` ya ignora/completa campos. | Santi (2026-11-10) |
 | D11 | El spike (`spike-animados/`) no se versiona; se borra al terminar la parte 3 (con OK de Santi). | Igual que en las partes anteriores. | Santi (2026-11-10) |
 | D12 | En Inicio, las miniaturas de los animados se ven quietas (primer cuadro); verlas en movimiento queda para más adelante. | Mantener esta parte chica y la lista liviana. | Santi (2026-11-10) |
-| D13 | Los tests instrumentados de video usan el video de Santi en `app/src/androidTest/assets/video/prueba.mp4` (H.264, 1280×720, 60 fps, 4,2 s, 440 KB; queda en el repo de GitHub). | Hace falta un video real para probar la lectura de cuadros; además tiene más resolución y fps que los del spike. | Santi (2026-11-10) |
+| D13 | Los tests instrumentados de video usan el video de Santi en `app/src/androidTest/assets/video/prueba.mp4` (H.264, 1280×720, 60 fps, 4,2 s, 440 KB; queda en el repo de GitHub). | Hace falta un video real para probar la lectura de cuadros; además tiene más resolución y fps que los del spike. En P4 se sumó `prueba-vertical.mp4`, el mismo video con metadata de rotación, para probar videos verticales. | Santi (2026-11-10) |
 
 ## 5. Reglas de negocio
 
@@ -187,6 +187,37 @@ Ninguna. Las cuatro del borrador quedaron resueltas (sección 15).
 | 2026-11-10 | "Sí, aprobada" | Estado: aprobada. Spec commiteada; empieza la implementación. |
 | 2026-11-10 | Prueba de P3: "hubo un video de unos 40s que no lo pude generar osea cuaadno arrancaba el mensaje "Generando X%" llegaba al 100% y volvia al 40-50% aprox y nunca se generó" | Bug: webp-android no pisa un archivo existente y todos los intentos de la escalera (D6) medían el primero (675 KB los 6). Arreglo: borrar el archivo antes de cada intento; test nuevo `rn4_siElPrimerIntentoNoEntra_elSiguienteSeMideDeNuevo`. Con el mismo video (22 s, 528×352) entró en el segundo intento (490 KB). |
 | 2026-11-10 | Después del arreglo, sobre si commitear P3: "Sí, todo bien" | UI de P3 confirmada y commiteada. No quedó confirmado explícitamente un video grabado en vertical (se verifica en P4). |
+
+## 16. Verificación (P4, 2026-11-10)
+
+Entorno: Samsung S20 FE (SM-G780G), Android 13, WhatsApp 2.26.42.74. 64 tests unitarios (PC) y 35 instrumentados (teléfono, con `am instrument`, sin borrar los stickers), todos en verde. Prueba manual de Santi durante P3.
+
+| AC | Test automático | Prueba manual |
+|---|---|---|
+| AC-1 | — (solo UI) | Sí |
+| AC-2 | `AnimatedStickerTest` (cuadro en un instante, tamaño de trabajo) | Sí |
+| AC-3 | `AnimatedStickerTest.ac3` (desde 3 s en un video de 4,2 s salen 17 cuadros) | No con un video de menos de 3 s |
+| AC-4 | — (solo UI) | No confirmado explícitamente |
+| AC-5 | — (solo UI) | Sí el progreso; cancelar no confirmado explícitamente |
+| AC-6 | `AnimatedStickerTest.ac6` (video de prueba y cuadros sintéticos: 512×512, loop infinito, ≥ 2 cuadros, ≥ 8 ms, ≤ 10 s, primer cuadro correcto) | Sí: los stickers se mueven en WhatsApp |
+| AC-7 | `AnimatedStickerTest.ac7` (ruido) y `rn4_...` (la escalera mide cada intento) | Sí: con el bug apareció el mensaje; arreglado, el mismo video entró en el segundo intento |
+| AC-8 | `AnimatedPacksTest` | Sí: "Mis animados 2 · animado" |
+| AC-9 | `AnimatedPacksTest` (límite compartido) | No (requiere 10 packs) |
+| AC-10 | `StickerContentProviderTest.spec003_ac10` | Sí, implícito: WhatsApp lo aceptó como animado |
+| AC-11 | `AnimatedTrayTest` | Sí, implícito: el pack tiene ícono en WhatsApp |
+| AC-12 | — | Sí: agregado y actualizado (versión 5, 5 stickers) |
+| AC-13 | `AnimatedPacksTest` (index.json de antes) | Sí: el pack estático de Santi siguió funcionando |
+
+**Video vertical:** `AnimatedStickerTest.videoVertical_seLeeDerechoPorLosDosCaminos`, con `prueba-vertical.mp4` (el video de prueba con metadata de rotación, generado con `ffmpeg -display_rotation 90 -c copy`, sin recodificar): por tiempo y por índice el cuadro sale de 576×1024 y coincide con el horizontal rotado. Así guarda la cámara los videos verticales; no se probó con uno grabado en el teléfono.
+
+**Auditoría:** se revisó todo el cambio de la rama contra la spec; sin código muerto ni avisos nuevos de Kotlin. El manifest final sigue sin permisos de red.
+
+**No verificado:**
+- Videos 1080p/4K de la cámara (tiempo y memoria); el de prueba es 720p.
+- Video vertical grabado en el teléfono (solo el generado con ffmpeg).
+- Videos cuadrados con rotación (VideoFrames supone que vienen ya rotados).
+- AC-3 con un video de menos de 3 s, AC-4 y cancelar en AC-5, AC-9 a mano.
+- Lint: siguen los avisos aceptados (`Aligned16KB` por D4, AGP más nuevo disponible, `UseKtx`).
 
 ---
 

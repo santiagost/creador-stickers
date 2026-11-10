@@ -74,6 +74,32 @@ class AnimatedStickerTest {
         assertEquals(expected, count)
     }
 
+    @Test
+    fun videoVertical_seLeeDerechoPorLosDosCaminos() {
+        // prueba-vertical.mp4 = prueba.mp4 con metadata de rotación (generado con ffmpeg -display_rotation 90, sin recodificar).
+        val info = VideoFrames.info(context, verticalUri)
+        assertTrue("rotación ${info.rotation}", info.rotation == 90 || info.rotation == 270)
+        assertEquals(720, info.width)
+        assertEquals(1280, info.height)
+        assertEquals(576, info.workWidth)
+        assertEquals(1024, info.workHeight)
+
+        val byTime = VideoFrames.frameAt(context, verticalUri, info, 0, exact = true)
+        var byIndex: Bitmap? = null
+        VideoFrames.frames(context, verticalUri, info, startMs = 0) { i, f -> if (i == 0) byIndex = f.copy(Bitmap.Config.ARGB_8888, false) }
+        assertEquals(576, byTime.width)
+        assertEquals(1024, byTime.height)
+        assertEquals(576, byIndex!!.width)
+        assertEquals(1024, byIndex!!.height)
+
+        // El contenido coincide con el video horizontal rotado como indica la metadata.
+        val flatInfo = VideoFrames.info(context, videoUri)
+        val flat = VideoFrames.frameAt(context, videoUri, flatInfo, 0, exact = true)
+        val rotated = Bitmap.createBitmap(flat, 0, 0, flat.width, flat.height, android.graphics.Matrix().apply { postRotate(info.rotation.toFloat()) }, true)
+        assertSimilarScaled(rotated, byTime)
+        assertSimilarScaled(rotated, byIndex!!)
+    }
+
     // --- AnimatedWebp ---
 
     @Test
@@ -143,6 +169,10 @@ class AnimatedStickerTest {
         return info
     }
 
+    /** Compara dos cuadros de igual orientación, llevándolos a 512x512. */
+    private fun assertSimilarScaled(a: Bitmap, b: Bitmap) =
+        assertSimilar(Bitmap.createScaledBitmap(a, 512, 512, true), Bitmap.createScaledBitmap(b, 512, 512, true))
+
     private fun assertSimilar(a: Bitmap, b: Bitmap) {
         var diff = 0L
         var n = 0
@@ -180,14 +210,20 @@ class AnimatedStickerTest {
     companion object {
         private const val TAG = "AnimatedStickerTest"
         private lateinit var videoUri: Uri
+        private lateinit var verticalUri: Uri
+
+        private fun copyAsset(name: String): Uri {
+            val inst = InstrumentationRegistry.getInstrumentation()
+            val file = File(inst.targetContext.cacheDir, name)
+            inst.context.assets.open("video/$name").use { input -> file.outputStream().use { input.copyTo(it) } }
+            return Uri.fromFile(file)
+        }
 
         @JvmStatic
         @BeforeClass
         fun copyVideo() {
-            val inst = InstrumentationRegistry.getInstrumentation()
-            val file = File(inst.targetContext.cacheDir, "prueba.mp4")
-            inst.context.assets.open("video/prueba.mp4").use { input -> file.outputStream().use { input.copyTo(it) } }
-            videoUri = Uri.fromFile(file)
+            videoUri = copyAsset("prueba.mp4")
+            verticalUri = copyAsset("prueba-vertical.mp4")
         }
     }
 }
