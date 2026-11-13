@@ -37,7 +37,7 @@ Hoy el tramo de un animado es fijo de 3 s y solo se elige dónde arranca, y solo
 - **RN-1** La caja nunca sale de la línea de tiempo: arrastrarla la mueve entera; tirar de un borde cambia el largo, entre 2 y 10 s, sin pasarse del principio o el final.
 - **RN-2** Si el video o GIF dura menos de 2 s se usa entero (si tiene al menos 2 cuadros); si dura entre 2 y 5 s, la caja arranca cubriéndolo entero.
 - **RN-3** Cuadros por segundo del sticker: 15 hasta 5 s; para tramos más largos, `floor(75 / segundos)` (D4). Siempre ≥ 2 cuadros, cada uno ≥ 8 ms.
-- **RN-4** En un GIF, el tramo se toma sobre su línea de tiempo real (sumando la duración de cada cuadro); si un cuadro declara 0 ms se toma como 100 ms (convención de los navegadores; no verificado para todos los GIF).
+- **RN-4** En un GIF, el tramo se toma sobre su línea de tiempo real (sumando la duración de cada cuadro); si un cuadro declara menos de 20 ms (o no declara nada) se toma como 100 ms (convención de los navegadores; el lector de Glide ya lo hace así, verificado en su bytecode en P2).
 - **RN-5** Todo lo demás de la spec 003 sigue igual: encuadre sobre el primer cuadro, escalera hasta 500 KB, loop infinito, mensaje si no entra.
 
 ## 6. Flujo
