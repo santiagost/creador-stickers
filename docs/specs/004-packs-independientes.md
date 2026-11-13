@@ -114,3 +114,4 @@ Ninguna.
 | 2026-11-10 | "Igual aca vayamos mas rapido." / P1: "Si" / P2: "Si, lo eliminamos" / P3: "Si" / P4: "Bueno, lo dejamos para despues" | Spec más corta; dos specs (004 y 005); D1, D2, D3. |
 | 2026-11-10 | P5: "Maximo 10s y minimo 2s" / P6: "Dale, hacemos que permita selector entre gif y videos" | Para la spec 005. |
 | 2026-11-13 | "Sí, aprobada" (con D2, D4, D5 y D6 como estaban) | Estado: aprobada; D2, D4, D5 y D6 confirmadas. |
+| 2026-11-13 | Después de probarlo: "Todo bien, commiteá" | Implementación (P1 y P2) commiteada. Verificado: 58 tests unitarios, 35 instrumentados en el S20 FE, y los 2 packs existentes de Santi aparecen bien en la lista nueva (captura). |

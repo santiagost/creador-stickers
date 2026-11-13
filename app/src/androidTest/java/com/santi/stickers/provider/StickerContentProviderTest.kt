@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.santi.stickers.data.AddResult
+import com.santi.stickers.data.CreatePackResult
 import com.santi.stickers.data.PackRepository
 import com.santi.stickers.data.Packs
 import org.junit.After
@@ -48,7 +49,12 @@ class StickerContentProviderTest {
     private fun uri(vararg segments: String): Uri =
         Uri.Builder().scheme("content").authority(authority).apply { segments.forEach { appendPath(it) } }.build()
 
-    private fun addStickers(count: Int) = repeat(count) { assertTrue(repo.addSticker("webp-$it".toByteArray()) is AddResult.Added) }
+    /** Llena packs como antes de la spec 004: el último del tipo, o uno nuevo con el nombre sugerido. */
+    private fun addStickers(count: Int, animated: Boolean = false) = repeat(count) {
+        val target = repo.load().packs.lastOrNull { p -> p.animated == animated }?.takeIf { p -> !p.isFull }
+            ?: (repo.createPack(repo.suggestedName(animated), animated) as CreatePackResult.Created).pack
+        assertTrue(repo.addSticker(target.identifier, "webp-$it".toByteArray()) is AddResult.Added)
+    }
 
     private fun <T> Cursor.rows(read: Cursor.() -> T): List<T> = use { c ->
         buildList { while (c.moveToNext()) add(c.read()) }
@@ -102,7 +108,7 @@ class StickerContentProviderTest {
     @Test
     fun spec003_ac10_packAnimadoSeInformaComoAnimado() {
         addStickers(3)
-        repeat(3) { assertTrue(repo.addSticker("anim-$it".toByteArray(), animated = true) is AddResult.Added) }
+        addStickers(3, animated = true)
 
         val rows = resolver.query(uri("metadata"), null, null, null, null)!!.rows {
             str("sticker_pack_identifier") to int("animated_sticker_pack")
@@ -158,7 +164,7 @@ class StickerContentProviderTest {
         fun count() = resolver.query(uri("stickers", "pack_1"), null, null, null, null)!!.rows { 1 }.size
         assertEquals("3", version())
 
-        repo.addSticker("nuevo".toByteArray())
+        repo.addSticker("pack_1", "nuevo".toByteArray())
 
         assertEquals("4", version())
         assertEquals(4, count())

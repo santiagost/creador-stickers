@@ -10,7 +10,10 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
-/** Spec 001: RN-3 a RN-6, RN-10 a RN-12, RN-14; AC-6 a AC-9, AC-16 a AC-18 y parte lógica de AC-19. */
+/**
+ * Spec 004 (packs independientes) más las reglas de las specs 001 y 003 que siguen vigentes:
+ * versión, ícono, contadores, borrado con mínimo de 3, confirmación de WhatsApp.
+ */
 class PackRepositoryTest {
 
     @get:Rule
@@ -20,7 +23,6 @@ class PackRepositoryTest {
     private val trayCalls = mutableListOf<String>()
     private lateinit var repo: PackRepository
 
-    /** Tray falso: deja constancia de qué sticker se usó para generarlo. */
     private fun fakeTray(sticker: File): ByteArray {
         trayCalls += sticker.name
         return "tray-of-${sticker.name}".toByteArray()
@@ -34,201 +36,205 @@ class PackRepositoryTest {
 
     private fun webp(n: Int) = "webp-$n".toByteArray()
 
-    private fun added(result: AddResult): AddResult.Added {
-        assertTrue("se esperaba Added y vino $result", result is AddResult.Added)
-        return result as AddResult.Added
+    private fun create(name: String = "Pack", animated: Boolean = false): StickerPack {
+        val r = repo.createPack(name, animated)
+        assertTrue("se esperaba Created y vino $r", r is CreatePackResult.Created)
+        return (r as CreatePackResult.Created).pack
     }
 
-    private fun addMany(count: Int) = repeat(count) { added(repo.addSticker(webp(it))) }
+    private fun add(packId: String, n: Int = 0): AddResult.Added {
+        val r = repo.addSticker(packId, webp(n))
+        assertTrue("se esperaba Added y vino $r", r is AddResult.Added)
+        return r as AddResult.Added
+    }
+
+    private fun addMany(packId: String, count: Int) = repeat(count) { add(packId, it) }
 
     private fun pack(id: String) = repo.load().packs.single { it.identifier == id }
 
-    // --- Crear y llenar packs ---
+    // --- Crear packs (spec 004) ---
 
     @Test
-    fun `AC-6 el primer sticker crea Mis stickers 1 con version 1, archivo e icono`() {
-        val result = added(repo.addSticker(webp(1)))
-
-        val p = result.pack
+    fun `AC-2 crear un pack lo deja vacio, con su nombre y su tipo`() {
+        val p = create("Gatos", animated = true)
         assertEquals("pack_1", p.identifier)
-        assertEquals("Mis stickers 1", p.name)
-        assertEquals(1, p.imageDataVersion)
-        assertEquals(listOf("s1.webp"), p.stickers.map { it.file })
-        assertArrayEquals(webp(1), File(root, "pack_1/s1.webp").readBytes())
-        assertEquals("tray-of-s1.webp", File(root, "pack_1/${StickerPack.TRAY_FILE}").readText())
-        assertFalse(p.everAdded)
-        assertEquals(0, p.lastConfirmedVersion)
+        assertEquals("Gatos", p.name)
+        assertTrue(p.animated)
+        assertTrue(p.stickers.isEmpty())
+        assertEquals(listOf(p), repo.load().packs)
     }
 
     @Test
-    fun `RN-12 cada sticker lleva el emoji fijo`() {
-        val p = added(repo.addSticker(webp(1))).pack
-        assertEquals(listOf("😀"), p.stickers.single().emojis)
+    fun `D2 el nombre se guarda sin espacios de mas y no puede quedar vacio ni pasar de 128`() {
+        assertEquals("Hola", create("  Hola  ").name)
+        assertEquals(CreatePackResult.InvalidName, repo.createPack("   ", animated = false))
+        assertEquals(CreatePackResult.InvalidName, repo.createPack("x".repeat(129), animated = false))
+        assertTrue(repo.createPack("x".repeat(128), animated = false) is CreatePackResult.Created)
     }
 
     @Test
-    fun `AC-9 sumar un sticker a un pack existente sube la version en 1 y no regenera el icono`() {
-        addMany(1)
-        val p = added(repo.addSticker(webp(2))).pack
-        assertEquals(2, p.imageDataVersion)
-        assertEquals(listOf("s1.webp", "s2.webp"), p.stickers.map { it.file })
+    fun `D2 nombre sugerido segun el tipo y el proximo numero de pack`() {
+        assertEquals("Mis stickers 1", repo.suggestedName(animated = false))
+        create()
+        assertEquals("Mis animados 2", repo.suggestedName(animated = true))
+    }
+
+    @Test
+    fun `AC-3 con 10 packs no se puede crear otro, de ningun tipo`() {
+        repeat(10) { create("P$it", animated = it % 2 == 0) }
+        assertFalse(repo.canCreatePack())
+        assertEquals(CreatePackResult.LimitReached, repo.createPack("Otro", animated = false))
+        assertEquals(10, repo.load().packs.size)
+    }
+
+    @Test
+    fun `D5 los packs quedan en orden de creacion`() {
+        create("A"); create("B", animated = true); create("C")
+        assertEquals(listOf("A", "B", "C"), repo.load().packs.map { it.name })
+    }
+
+    // --- Agregar stickers a un pack ---
+
+    @Test
+    fun `RN-2 el sticker va al pack elegido aunque haya otros`() {
+        val a = create("A")
+        val b = create("B")
+        add(b.identifier, 1)
+        assertTrue(pack(a.identifier).stickers.isEmpty())
+        assertEquals(listOf("s1.webp"), pack(b.identifier).stickers.map { it.file })
+        assertArrayEquals(webp(1), File(root, "${b.identifier}/s1.webp").readBytes())
+    }
+
+    @Test
+    fun `el primer sticker de un pack genera el icono y la version arranca en 1`() {
+        val p = create()
+        val r = add(p.identifier, 1)
+        assertEquals(1, r.pack.imageDataVersion)
+        assertEquals("tray-of-s1.webp", File(root, "${p.identifier}/${StickerPack.TRAY_FILE}").readText())
+        add(p.identifier, 2)
+        assertEquals(2, pack(p.identifier).imageDataVersion)
         assertEquals(listOf("s1.webp"), trayCalls)
     }
 
     @Test
-    fun `AC-7 con el ultimo pack lleno se crea Mis stickers 2 y el pack lleno no cambia`() {
-        addMany(30)
-        val before = pack("pack_1")
-
-        val result = added(repo.addSticker(webp(31)))
-
-        assertEquals("pack_2", result.pack.identifier)
-        assertEquals("Mis stickers 2", result.pack.name)
-        assertEquals(listOf("s31.webp"), result.pack.stickers.map { it.file })
-        assertEquals(before, pack("pack_1"))
+    fun `RN-12 cada sticker lleva el emoji fijo`() {
+        val p = create()
+        assertEquals(listOf("😀"), add(p.identifier).pack.stickers.single().emojis)
     }
 
     @Test
-    fun `AC-8 con 10 packs llenos no se puede agregar y no se escribe nada`() {
-        addMany(300)
-        assertEquals(10, repo.load().packs.size)
-        assertFalse(repo.canAddSticker())
-
-        val indexBefore = File(root, "index.json").readText()
-        assertEquals(AddResult.LimitReached, repo.addSticker(webp(301)))
-        assertEquals(indexBefore, File(root, "index.json").readText())
-        assertFalse(File(root, "pack_11").exists())
+    fun `AC-6 con 30 stickers el pack esta lleno y no acepta mas`() {
+        val p = create()
+        addMany(p.identifier, 30)
+        assertTrue(pack(p.identifier).isFull)
+        val before = repo.load()
+        assertEquals(AddResult.PackFull, repo.addSticker(p.identifier, webp(31)))
+        assertEquals(before, repo.load())
     }
 
     @Test
-    fun `RN-4 con 10 packs y el ultimo con lugar todavia se puede agregar`() {
-        addMany(299)
-        assertTrue(repo.canAddSticker())
+    fun `agregar a un pack que no existe no cambia nada`() {
+        create()
+        val before = repo.load()
+        assertEquals(AddResult.NotFound, repo.addSticker("pack_9", webp(1)))
+        assertEquals(before, repo.load())
+    }
+
+    @Test
+    fun `RN-14 los numeros de sticker son globales y no se reutilizan`() {
+        val a = create("A")
+        val b = create("B")
+        add(a.identifier); add(b.identifier); add(a.identifier)
+        repo.deleteSticker(a.identifier, "s3.webp")
+        assertEquals("s4.webp", add(b.identifier).file)
     }
 
     // --- Persistencia ---
 
     @Test
-    fun `el estado sobrevive a una instancia nueva del repositorio y no quedan temporales`() {
-        addMany(4)
-        repo.confirmAdded("pack_1", sentVersion = 4)
-
-        val reloaded = PackRepository(root, ::fakeTray).load()
-
-        assertEquals(repo.load(), reloaded)
-        assertEquals(listOf("index.json", "pack_1"), root.list()!!.sorted())
+    fun `el estado sobrevive a una instancia nueva del repositorio`() {
+        val p = create()
+        addMany(p.identifier, 4)
+        repo.confirmAdded(p.identifier, sentVersion = 4)
+        assertEquals(repo.load(), PackRepository(root, ::fakeTray).load())
+        assertEquals(listOf("index.json", p.identifier), root.list()!!.sorted())
     }
 
     @Test
-    fun `sin index json el repositorio arranca vacio`() {
-        assertTrue(repo.load().packs.isEmpty())
-        assertTrue(repo.canAddSticker())
+    fun `AC-9 un index json de antes se lee igual y sus packs siguen recibiendo stickers`() {
+        File(root, "index.json").writeText(
+            """{"schemaVersion":1,"nextPackNumber":2,"nextStickerNumber":4,"packs":[{"identifier":"pack_1","name":"Mis stickers 1","imageDataVersion":3,"lastConfirmedVersion":3,"everAdded":true,"stickers":[{"file":"s1.webp","emojis":["😀"]},{"file":"s2.webp","emojis":["😀"]},{"file":"s3.webp","emojis":["😀"]}]}]}""",
+        )
+        val p = repo.load().packs.single()
+        assertFalse(p.animated)
+        assertEquals("s4.webp", add("pack_1").file)
+        assertEquals("pack_2", create().identifier)
     }
 
     // --- Borrar ---
 
     @Test
     fun `AC-16 borrar en un pack agregado con mas de 3 sube la version y borra el archivo`() {
-        addMany(4)
-        repo.confirmAdded("pack_1", sentVersion = 4)
-
-        val result = repo.deleteSticker("pack_1", "s4.webp")
-
-        assertTrue(result is DeleteResult.Deleted)
-        val p = pack("pack_1")
-        assertEquals(5, p.imageDataVersion)
-        assertEquals(listOf("s1.webp", "s2.webp", "s3.webp"), p.stickers.map { it.file })
-        assertFalse(File(root, "pack_1/s4.webp").exists())
-        assertEquals(SyncState.NEEDS_UPDATE, p.syncState(whitelisted = true))
+        val p = create()
+        addMany(p.identifier, 4)
+        repo.confirmAdded(p.identifier, sentVersion = 4)
+        assertTrue(repo.deleteSticker(p.identifier, "s4.webp") is DeleteResult.Deleted)
+        assertEquals(5, pack(p.identifier).imageDataVersion)
+        assertFalse(File(root, "${p.identifier}/s4.webp").exists())
+        assertEquals(SyncState.NEEDS_UPDATE, pack(p.identifier).syncState(whitelisted = true))
     }
 
     @Test
     fun `AC-17 en un pack agregado con exactamente 3 no se puede borrar`() {
-        addMany(3)
-        repo.confirmAdded("pack_1", sentVersion = 3)
-        val before = repo.load()
-
-        assertEquals(DeleteResult.BelowMinimum, repo.deleteSticker("pack_1", "s2.webp"))
-        assertEquals(before, repo.load())
-        assertTrue(File(root, "pack_1/s2.webp").exists())
+        val p = create()
+        addMany(p.identifier, 3)
+        repo.confirmAdded(p.identifier, sentVersion = 3)
+        assertEquals(DeleteResult.BelowMinimum, repo.deleteSticker(p.identifier, "s2.webp"))
+        assertTrue(File(root, "${p.identifier}/s2.webp").exists())
     }
 
     @Test
-    fun `RN-10 un pack nunca agregado puede quedar con menos de 3`() {
-        addMany(3)
-        assertTrue(repo.deleteSticker("pack_1", "s3.webp") is DeleteResult.Deleted)
-        assertEquals(2, pack("pack_1").stickers.size)
-    }
-
-    @Test
-    fun `AC-18 un pack nunca agregado que queda vacio desaparece y el siguiente usa un identificador nuevo`() {
-        addMany(1)
-
-        val result = repo.deleteSticker("pack_1", "s1.webp")
-
-        assertEquals(DeleteResult.Deleted(pack = null), result)
-        assertTrue(repo.load().packs.isEmpty())
-        assertFalse(File(root, "pack_1").exists())
-
-        val next = added(repo.addSticker(webp(2))).pack
-        assertEquals("pack_2", next.identifier)
-        assertEquals("Mis stickers 2", next.name)
-        assertEquals(listOf("s2.webp"), next.stickers.map { it.file })
-    }
-
-    @Test
-    fun `RN-14 los numeros de sticker no se reutilizan despues de borrar`() {
-        addMany(5)
-        repo.deleteSticker("pack_1", "s5.webp")
-        val p = added(repo.addSticker(webp(6))).pack
-        assertEquals("s6.webp", p.stickers.last().file)
-    }
-
-    @Test
-    fun `AC-19 borrar el primer sticker regenera el icono desde el nuevo primero con una sola suba de version`() {
-        addMany(4)
+    fun `AC-7 spec 004 borrar el ultimo sticker de un pack nunca agregado lo deja vacio, no lo elimina`() {
+        val p = create("Vacío")
+        add(p.identifier)
+        val r = repo.deleteSticker(p.identifier, "s1.webp") as DeleteResult.Deleted
+        assertTrue(r.pack.stickers.isEmpty())
+        assertEquals("Vacío", pack(p.identifier).name)
+        assertFalse(File(root, "${p.identifier}/${StickerPack.TRAY_FILE}").exists())
+        // Al volver a agregar, el ícono se genera de nuevo.
         trayCalls.clear()
-
-        repo.deleteSticker("pack_1", "s1.webp")
-
+        add(p.identifier)
         assertEquals(listOf("s2.webp"), trayCalls)
-        assertEquals("tray-of-s2.webp", File(root, "pack_1/${StickerPack.TRAY_FILE}").readText())
-        assertEquals(5, pack("pack_1").imageDataVersion)
+    }
+
+    @Test
+    fun `AC-19 borrar el primer sticker regenera el icono desde el nuevo primero`() {
+        val p = create()
+        addMany(p.identifier, 4)
+        trayCalls.clear()
+        repo.deleteSticker(p.identifier, "s1.webp")
+        assertEquals(listOf("s2.webp"), trayCalls)
+        assertEquals(5, pack(p.identifier).imageDataVersion)
     }
 
     @Test
     fun `borrar un sticker que no existe no cambia nada`() {
-        addMany(4)
+        val p = create()
+        addMany(p.identifier, 4)
         val before = repo.load()
-        assertEquals(DeleteResult.NotFound, repo.deleteSticker("pack_1", "s99.webp"))
+        assertEquals(DeleteResult.NotFound, repo.deleteSticker(p.identifier, "s99.webp"))
         assertEquals(DeleteResult.NotFound, repo.deleteSticker("pack_9", "s1.webp"))
         assertEquals(before, repo.load())
-    }
-
-    @Test
-    fun `los stickers nuevos siguen yendo al ultimo pack aunque se haya liberado lugar en uno anterior`() {
-        addMany(31)
-        repo.deleteSticker("pack_1", "s1.webp")
-        val p = added(repo.addSticker(webp(32))).pack
-        assertEquals("pack_2", p.identifier)
     }
 
     // --- Confirmación de WhatsApp ---
 
     @Test
     fun `RN-8 confirmar guarda la version enviada y marca el pack como agregado alguna vez`() {
-        addMany(3)
-        repo.confirmAdded("pack_1", sentVersion = 3)
-        val p = pack("pack_1")
-        assertEquals(3, p.lastConfirmedVersion)
-        assertTrue(p.everAdded)
-    }
-
-    @Test
-    fun `confirmar un pack que ya no existe no falla ni cambia nada`() {
-        addMany(3)
-        val before = repo.load()
-        repo.confirmAdded("pack_9", sentVersion = 1)
-        assertEquals(before, repo.load())
+        val p = create()
+        addMany(p.identifier, 3)
+        repo.confirmAdded(p.identifier, sentVersion = 3)
+        assertEquals(3, pack(p.identifier).lastConfirmedVersion)
+        assertTrue(pack(p.identifier).everAdded)
     }
 }

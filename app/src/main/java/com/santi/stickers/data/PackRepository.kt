@@ -33,54 +33,61 @@ class PackRepository(
         if (!indexFile.exists()) PackIndex() else json.decodeFromString(PackIndex.serializer(), indexFile.readText())
     }
 
-    /** RN-3 y RN-4 (spec 001); RN-6 y RN-7 (spec 003): por tipo, con el límite de packs compartido. */
-    fun canAddSticker(animated: Boolean = false): Boolean = synchronized(lock) { canAdd(load(), animated) }
+    /** Spec 004, RN-1: hasta 10 packs en total (límite de WhatsApp). */
+    fun canCreatePack(): Boolean = synchronized(lock) { load().packs.size < PackRules.MAX_PACKS }
+
+    /** Spec 004, D2: "Mis stickers N" o "Mis animados N", con N el número que va a tener el pack. */
+    fun suggestedName(animated: Boolean): String = synchronized(lock) {
+        val prefix = if (animated) PackRules.ANIMATED_PACK_NAME_PREFIX else PackRules.PACK_NAME_PREFIX
+        "$prefix${load().nextPackNumber}"
+    }
+
+    /** Spec 004: crea un pack vacío al final de la lista (D5). */
+    fun createPack(name: String, animated: Boolean): CreatePackResult = synchronized(lock) {
+        val clean = name.trim()
+        if (clean.isEmpty() || clean.length > PackRules.MAX_NAME_LENGTH) return CreatePackResult.InvalidName
+        val index = load()
+        if (index.packs.size >= PackRules.MAX_PACKS) return CreatePackResult.LimitReached
+        val pack = StickerPack(
+            identifier = "pack_${index.nextPackNumber}",
+            name = clean,
+            imageDataVersion = 0, // sube a 1 con el primer sticker
+            animated = animated,
+        )
+        save(index.copy(nextPackNumber = index.nextPackNumber + 1, packs = index.packs + pack))
+        CreatePackResult.Created(pack)
+    }
 
     /**
-     * Suma un sticker ya codificado (WebP 512x512) al último pack de su tipo, o a uno nuevo de ese tipo
-     * si no hay o está lleno (RN-3 de la spec 001; RN-6 de la spec 003: estáticos y animados no se mezclan).
+     * Spec 004, RN-2: suma un sticker ya codificado (WebP 512x512) al pack [packId]. El que llama se asegura
+     * de que el tipo coincida (foto para packs normales, video para animados). Sube la versión (RN-5 de la 001).
      */
-    fun addSticker(webp: ByteArray, animated: Boolean = false): AddResult = synchronized(lock) {
+    fun addSticker(packId: String, webp: ByteArray): AddResult = synchronized(lock) {
         val index = load()
-        if (!canAdd(index, animated)) return AddResult.LimitReached
+        val target = index.packs.firstOrNull { it.identifier == packId } ?: return AddResult.NotFound
+        if (target.isFull) return AddResult.PackFull // RN-3
 
-        val last = lastOfType(index, animated)
-        val createsPack = last == null || last.isFull
         val fileName = "s${index.nextStickerNumber}.webp"
-        val target = if (createsPack) {
-            val n = index.nextPackNumber
-            val prefix = if (animated) PackRules.ANIMATED_PACK_NAME_PREFIX else PackRules.PACK_NAME_PREFIX
-            StickerPack(identifier = "pack_$n", name = "$prefix$n", imageDataVersion = 0, animated = animated)
-        } else {
-            last
-        }
-
         val dir = packDir(target.identifier).apply { mkdirs() }
         val stickerFile = File(dir, fileName)
         stickerFile.writeBytes(webp)
-        if (createsPack) File(dir, StickerPack.TRAY_FILE).writeBytes(trayRenderer(stickerFile))
+        // El ícono sale del primer sticker (RN-11 de la 001); también si el pack había quedado vacío.
+        if (target.stickers.isEmpty()) File(dir, StickerPack.TRAY_FILE).writeBytes(trayRenderer(stickerFile))
 
-        // Un pack nuevo arranca en versión 1; uno existente sube en 1 (RN-5).
         val updated = target.copy(
             imageDataVersion = target.imageDataVersion + 1,
             stickers = target.stickers + StickerEntry(fileName),
         )
-        val packs = if (createsPack) {
-            index.packs + updated
-        } else {
-            index.packs.map { if (it.identifier == updated.identifier) updated else it }
-        }
         save(
             index.copy(
-                nextPackNumber = index.nextPackNumber + if (createsPack) 1 else 0,
                 nextStickerNumber = index.nextStickerNumber + 1,
-                packs = packs,
+                packs = index.packs.map { if (it.identifier == packId) updated else it },
             ),
         )
         AddResult.Added(updated, fileName)
     }
 
-    /** RN-10, RN-11, AC-16 a AC-19. */
+    /** RN-10, RN-11, AC-16 a AC-19 (spec 001); AC-7 de la 004: un pack que queda vacío no se elimina. */
     fun deleteSticker(packId: String, file: String): DeleteResult = synchronized(lock) {
         val index = load()
         val pack = index.packs.firstOrNull { it.identifier == packId } ?: return DeleteResult.NotFound
@@ -90,18 +97,13 @@ class PackRepository(
         if (pack.everAdded && remaining.size < PackRules.MIN_STICKERS) return DeleteResult.BelowMinimum
 
         val dir = packDir(packId)
-        if (remaining.isEmpty()) {
-            // Solo llega acá un pack nunca agregado (si no, BelowMinimum): se elimina entero.
-            save(index.copy(packs = index.packs.filterNot { it.identifier == packId }))
-            dir.deleteRecursively()
-            return DeleteResult.Deleted(pack = null)
-        }
-
         val updated = pack.copy(imageDataVersion = pack.imageDataVersion + 1, stickers = remaining)
         save(index.copy(packs = index.packs.map { if (it.identifier == packId) updated else it }))
         File(dir, file).delete()
-        if (pack.stickers.first().file == file) {
-            File(dir, StickerPack.TRAY_FILE).writeBytes(trayRenderer(File(dir, remaining.first().file)))
+        when {
+            remaining.isEmpty() -> File(dir, StickerPack.TRAY_FILE).delete() // se regenera con el próximo sticker
+            pack.stickers.first().file == file ->
+                File(dir, StickerPack.TRAY_FILE).writeBytes(trayRenderer(File(dir, remaining.first().file)))
         }
         DeleteResult.Deleted(updated)
     }
@@ -121,14 +123,6 @@ class PackRepository(
                 },
             ),
         )
-    }
-
-    private fun lastOfType(index: PackIndex, animated: Boolean): StickerPack? = index.packs.lastOrNull { it.animated == animated }
-
-    /** Entra si el último pack de ese tipo tiene lugar, o si todavía se puede crear un pack (10 en total). */
-    private fun canAdd(index: PackIndex, animated: Boolean): Boolean {
-        val last = lastOfType(index, animated)
-        return (last != null && !last.isFull) || index.packs.size < PackRules.MAX_PACKS
     }
 
     /** Escritura atómica: temporal + rename (sección 9). */

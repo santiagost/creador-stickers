@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.santi.stickers.data.AddResult
+import com.santi.stickers.data.CreatePackResult
 import com.santi.stickers.data.DeleteResult
 import com.santi.stickers.data.PackRules
 import com.santi.stickers.data.PackStatus
@@ -41,6 +42,9 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data object Home : Screen
 
+    /** Spec 004: pantalla de un pack. */
+    data class Pack(val packId: String) : Screen
+
     /**
      * [photo] es null mientras se decodifica. Spec 002: [removal] guarda el recorte ya calculado (D9),
      * [showSubject] dice si "Quitar fondo" está prendido y [removing] si ML Kit está trabajando.
@@ -69,8 +73,6 @@ data class VideoClip(val uri: Uri, val info: VideoInfo, val startMs: Long)
 data class HomeState(
     val loading: Boolean = true,
     val packs: List<PackStatus> = emptyList(),
-    val canAddStatic: Boolean = true,
-    val canAddAnimated: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -113,25 +115,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 HomeState(
                     loading = false,
                     packs = packStatuses(index) { WhatsApp.isWhitelisted(context, it) },
-                    canAddStatic = repository.canAddSticker(animated = false),
-                    canAddAnimated = repository.canAddSticker(animated = true),
                 )
             }
         }
     }
 
+    // --- Packs (spec 004) ---
+
+    /** Pack al que va el sticker que se está creando (RN-2). */
+    private var targetPackId: String? = null
+
+    fun suggestedName(animated: Boolean): String = repository.suggestedName(animated)
+
+    /** AC-2, AC-3. */
+    fun createPack(name: String, animated: Boolean) {
+        viewModelScope.launch {
+            when (val r = withContext(Dispatchers.IO) { repository.createPack(name, animated) }) {
+                is CreatePackResult.Created -> screen = Screen.Pack(r.pack.identifier)
+                CreatePackResult.LimitReached -> message("Llegaste al máximo de ${PackRules.MAX_PACKS} packs.")
+                CreatePackResult.InvalidName -> message("El nombre no puede estar vacío ni pasar de ${PackRules.MAX_NAME_LENGTH} letras.")
+            }
+            refresh()
+        }
+    }
+
+    fun openPack(packId: String) {
+        screen = Screen.Pack(packId)
+    }
+
+    fun closePack() {
+        screen = Screen.Home
+    }
+
+    /** Vuelve al pack desde el que se estaba creando un sticker (o a Inicio si no hay). */
+    private fun backToPack() {
+        screen = targetPackId?.let { Screen.Pack(it) } ?: Screen.Home
+    }
+
     // --- Crear sticker ---
 
-    /** AC-8 (spec 001), AC-9 (spec 003): con el máximo alcanzado, ni se abre el selector. */
-    fun tryStartNewSticker(animated: Boolean, openPicker: () -> Unit) {
-        if (if (animated) home.canAddAnimated else home.canAddStatic) {
-            openPicker()
-        } else {
-            message(
-                "Llegaste al máximo: ${PackRules.MAX_PACKS} packs de ${PackRules.MAX_STICKERS} stickers. " +
-                    "Borrá alguno para hacer lugar.",
-            )
+    /** AC-5 y AC-6 (spec 004): con el pack lleno no se abre el selector. */
+    fun tryStartNewSticker(packId: String, openPicker: (animated: Boolean) -> Unit) {
+        val pack = repository.load().packs.firstOrNull { it.identifier == packId } ?: return
+        if (pack.isFull) {
+            message("Este pack ya tiene ${PackRules.MAX_STICKERS} stickers. Creá otro pack.")
+            return
         }
+        targetPackId = packId
+        openPicker(pack.animated)
     }
 
     // --- Video (spec 003) ---
@@ -194,7 +225,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if ((screen as? Screen.Crop)?.video != clip) return@launch
             if (first == null) {
-                screen = Screen.Home
+                backToPack()
                 message("No se pudo leer el video.")
             } else {
                 screen = Screen.Crop(photo = first, video = clip)
@@ -206,10 +237,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun cancelTrim() {
         trimPreviewJob?.cancel()
         cropJob?.cancel()
-        screen = Screen.Home
+        backToPack()
     }
 
-    /** AC-5 a AC-7: genera el sticker animado con progreso y lo suma al último pack animado (RN-6). */
+    /** AC-5 a AC-7 (spec 003): genera el sticker animado con progreso y lo suma al pack elegido (spec 004, RN-2). */
     fun saveAnimated(crop: CropTransform, frameSize: Float) {
         val state = screen as? Screen.Crop ?: return
         val clip = state.video ?: return
@@ -234,16 +265,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess {
                     when (it) {
                         is AnimatedResult.Ok -> {
-                            when (val added = withContext(Dispatchers.IO) { repository.addSticker(it.bytes, animated = true) }) {
-                                is AddResult.Added -> {
-                                    screen = Screen.Home
-                                    message("Sticker animado guardado en ${added.pack.name}.")
-                                }
-                                AddResult.LimitReached -> {
-                                    screen = Screen.Home
-                                    message("Llegaste al máximo de packs.")
-                                }
-                            }
+                            onAdded(withContext(Dispatchers.IO) { addToTarget(it.bytes) })
                         }
                         AnimatedResult.TooBig -> {
                             screen = current.copy(generating = null)
@@ -274,7 +296,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (screen !is Screen.Crop) return@launch // se canceló mientras cargaba
             if (photo == null) {
-                screen = Screen.Home
+                backToPack()
                 message("No se pudo abrir esa foto.")
             } else {
                 screen = Screen.Crop(photo)
@@ -288,7 +310,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cropJob?.cancel()
         removeJob?.cancel()
         generateJob?.cancel()
-        screen = Screen.Home
+        backToPack()
     }
 
     /** Spec 002, RN-1 a RN-6: prende o apaga "Quitar fondo". */
@@ -329,28 +351,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val result = withContext(Dispatchers.Default) {
                 runCatching {
                     val sticker = StickerImages.render(photo, CropMath.toOutput(crop, frameSize))
-                    repository.addSticker(StickerImages.encodeWebp(sticker))
+                    addToTarget(StickerImages.encodeWebp(sticker))
                 }
             }
             saving = false
             result
-                .onSuccess {
-                    when (it) {
-                        is AddResult.Added -> {
-                            screen = Screen.Home
-                            message("Sticker guardado en ${it.pack.name}.")
-                        }
-                        AddResult.LimitReached -> {
-                            screen = Screen.Home
-                            message("Llegaste al máximo de packs.")
-                        }
-                    }
-                }
+                .onSuccess { onAdded(it) }
                 .onFailure {
                     Log.e(TAG, "No se pudo guardar el sticker", it)
                     message("No se pudo guardar el sticker.")
                 }
             refresh()
+        }
+    }
+
+    /** Spec 004, RN-2: el sticker va al pack desde el que se empezó. */
+    private fun addToTarget(webp: ByteArray): AddResult =
+        targetPackId?.let { repository.addSticker(it, webp) } ?: AddResult.NotFound
+
+    /** Después de guardar se vuelve a la pantalla del pack (AC-5). */
+    private fun onAdded(result: AddResult) {
+        when (result) {
+            is AddResult.Added -> {
+                screen = Screen.Pack(result.pack.identifier)
+                message("Sticker guardado en ${result.pack.name}.")
+            }
+            AddResult.PackFull -> {
+                backToPack()
+                message("Este pack ya tiene ${PackRules.MAX_STICKERS} stickers.")
+            }
+            AddResult.NotFound -> {
+                screen = Screen.Home
+                message("No se encontró el pack.")
+            }
         }
     }
 

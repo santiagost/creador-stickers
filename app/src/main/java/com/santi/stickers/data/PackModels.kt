@@ -11,6 +11,7 @@ object PackRules {
     const val PACK_NAME_PREFIX = "Mis stickers " // D10
     const val ANIMATED_PACK_NAME_PREFIX = "Mis animados " // spec 003, D8
     const val PUBLISHER = "Santi" // D10
+    const val MAX_NAME_LENGTH = 128 // spec 004, D2 (límite de WhatsApp)
 }
 
 /** Contenido de index.json (sección 9 de la spec). */
@@ -65,13 +66,23 @@ fun StickerPack.syncState(whitelisted: Boolean): SyncState = when {
 
 sealed interface AddResult {
     data class Added(val pack: StickerPack, val file: String) : AddResult
-    /** RN-4: 10 packs y el último lleno. */
-    data object LimitReached : AddResult
+    /** Spec 004, RN-3: el pack ya tiene 30. */
+    data object PackFull : AddResult
+    data object NotFound : AddResult
+}
+
+/** Spec 004: resultado de crear un pack. */
+sealed interface CreatePackResult {
+    data class Created(val pack: StickerPack) : CreatePackResult
+    /** RN-1: ya hay 10 packs. */
+    data object LimitReached : CreatePackResult
+    /** D2: vacío o más de 128 caracteres. */
+    data object InvalidName : CreatePackResult
 }
 
 sealed interface DeleteResult {
-    /** [pack] es el pack actualizado, o null si quedó vacío y se eliminó (AC-18). */
-    data class Deleted(val pack: StickerPack?) : DeleteResult
+    /** [pack] es el pack actualizado; puede quedar vacío (spec 004, AC-7). */
+    data class Deleted(val pack: StickerPack) : DeleteResult
     /** RN-10: el pack ya se agregó a WhatsApp y quedaría con menos de 3. */
     data object BelowMinimum : DeleteResult
     data object NotFound : DeleteResult

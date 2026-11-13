@@ -25,7 +25,13 @@ import com.santi.stickers.data.Packs
 import com.santi.stickers.ui.CropScreen
 import com.santi.stickers.ui.HomeScreen
 import com.santi.stickers.ui.MainViewModel
+import com.santi.stickers.ui.PackScreen
 import com.santi.stickers.ui.Screen
+import com.santi.stickers.data.PackRepository
+import com.santi.stickers.data.PackStatus
+import com.santi.stickers.data.SyncState
+import com.santi.stickers.whatsapp.AddPackRequest
+import androidx.activity.result.ActivityResultLauncher
 import com.santi.stickers.ui.TrimScreen
 import com.santi.stickers.whatsapp.AddStickerPackContract
 
@@ -74,26 +80,24 @@ private fun App(viewModel: MainViewModel) {
             state = viewModel.home,
             packDir = repository::packDir,
             snackbar = snackbar,
-            onNewSticker = { animated ->
-                viewModel.tryStartNewSticker(animated) {
-                    if (animated) {
-                        pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                    } else {
-                        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                }
-            },
-            onSendToWhatsApp = { status ->
-                viewModel.prepareWhatsAppRequest(status)?.let { request ->
-                    try {
-                        sendToWhatsApp.launch(request)
-                    } catch (_: ActivityNotFoundException) {
-                        viewModel.onWhatsAppLaunchFailed()
-                    }
-                }
-            },
-            onDelete = viewModel::deleteSticker,
+            suggestedName = viewModel::suggestedName,
+            onCreatePack = viewModel::createPack,
+            onOpenPack = viewModel::openPack,
         )
+        is Screen.Pack -> {
+            val status = viewModel.home.packs.firstOrNull { it.pack.identifier == screen.packId }
+            if (status == null) {
+                // Recién creado: hasta que llegue el refresh se muestra un pack vacío con el estado básico.
+                val pack = repository.load().packs.firstOrNull { it.identifier == screen.packId }
+                if (pack == null) {
+                    viewModel.closePack()
+                    return
+                }
+                PackScreenFor(PackStatus(pack, SyncState.NOT_ADDED), repository, snackbar, viewModel, pickPhoto, pickVideo, sendToWhatsApp)
+            } else {
+                PackScreenFor(status, repository, snackbar, viewModel, pickPhoto, pickVideo, sendToWhatsApp)
+            }
+        }
         is Screen.Crop -> CropScreen(
             state = screen,
             saving = viewModel.saving,
@@ -111,6 +115,45 @@ private fun App(viewModel: MainViewModel) {
             onNext = viewModel::confirmTrim,
         )
     }
+}
+
+@Composable
+private fun PackScreenFor(
+    status: PackStatus,
+    repository: PackRepository,
+    snackbar: SnackbarHostState,
+    viewModel: MainViewModel,
+    pickPhoto: ActivityResultLauncher<PickVisualMediaRequest>,
+    pickVideo: ActivityResultLauncher<PickVisualMediaRequest>,
+    sendToWhatsApp: ActivityResultLauncher<AddPackRequest>,
+) {
+    val packId = status.pack.identifier
+    PackScreen(
+        status = status,
+        dir = repository.packDir(packId),
+        snackbar = snackbar,
+        onBack = viewModel::closePack,
+        onNewSticker = {
+            // Spec 004, AC-5: normal → fotos; animado → videos (D6).
+            viewModel.tryStartNewSticker(packId) { animated ->
+                if (animated) {
+                    pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                } else {
+                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            }
+        },
+        onSendToWhatsApp = {
+            viewModel.prepareWhatsAppRequest(status)?.let { request ->
+                try {
+                    sendToWhatsApp.launch(request)
+                } catch (_: ActivityNotFoundException) {
+                    viewModel.onWhatsAppLaunchFailed()
+                }
+            }
+        },
+        onDelete = { file -> viewModel.deleteSticker(packId, file) },
+    )
 }
 
 /** Material 3 con los colores del fondo de pantalla (Android 12+), sin diseño propio (sección 11). */
