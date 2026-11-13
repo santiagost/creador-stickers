@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import com.santi.stickers.image.VideoFrames
 import java.util.Locale
 
 /** Spec 003, sección 11: elegir desde dónde arranca el tramo de 3 s. */
@@ -36,8 +35,8 @@ fun TrimScreen(
     onNext: () -> Unit,
 ) {
     BackHandler(onBack = onCancel) // AC-4
-    val maxStart = VideoFrames.maxStart(state.info)
-    val clipMs = VideoFrames.clipLength(state.info, state.startMs)
+    // Provisorio hasta P3 (spec 005): la barra mueve la caja de 5 s.
+    val maxStart = state.info.durationMs - state.range.lengthMs
 
     Column(
         Modifier
@@ -59,12 +58,12 @@ fun TrimScreen(
         }
         if (maxStart > 0) {
             Slider(
-                value = state.startMs.toFloat(),
+                value = state.range.startMs.toFloat(),
                 onValueChange = { onStartChange(it.toLong(), false) },
-                onValueChangeFinished = { onStartChange(state.startMs, true) },
+                onValueChangeFinished = { onStartChange(state.range.startMs, true) },
                 valueRange = 0f..maxStart.toFloat(),
             )
-            Text("Tramo de ${seconds(clipMs)} s desde ${seconds(state.startMs)} s", color = Color.White)
+            Text("Tramo de ${seconds(state.range.lengthMs)} s desde ${seconds(state.range.startMs)} s", color = Color.White)
         } else {
             // AC-3: video más corto que el tramo.
             Text("El video dura ${seconds(state.info.durationMs)} s: se usa entero.", color = Color.White)
