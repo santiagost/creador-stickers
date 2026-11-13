@@ -27,7 +27,7 @@ Hoy el tramo de un animado es fijo de 3 s y solo se elige dónde arranca, y solo
 |---|---|---|
 | D1 | La caja arranca en 5 s (o el largo del video/GIF si es más corto), mínimo 2 s, máximo 10 s (límite de WhatsApp). | Santi (2026-11-10) |
 | D2 | En un pack animado, "+ Nuevo sticker" ofrece "Video" o "GIF", cada uno con su selector (GIF: `PickVisualMedia.SingleMimeType("image/gif")`). | Santi (2026-11-10) |
-| D3 | GIF con `com.github.bumptech.glide:gifdecoder:5.0.9` (lector de GIF de Glide, suelto): Java puro, sin código nativo (no tiene el problema de 16 KB), Android 6+. Revisado en la PC: tiene cantidad de cuadros, duración de cada cuadro y lectura en orden. Licencia: no verificada todavía (se revisa en P0). | Santi (2026-11-13) |
+| D3 | GIF con `com.github.bumptech.glide:gifdecoder:5.0.9` (lector de GIF de Glide, suelto): Java puro, sin código nativo (no tiene el problema de 16 KB), Android 6+. Revisado en la PC: tiene cantidad de cuadros, duración de cada cuadro y lectura en orden. Licencia (verificada en P0, POM de Maven Central y LICENSE del repo): BSD simplificada + Apache 2.0. No agrega `.so` ni permisos al APK (verificado en P0). | Santi (2026-11-13) |
 | D4 | Para no pasarse de memoria, el sticker usa como mucho 75 cuadros: los tramos de hasta 5 s van a 15 fps; los más largos bajan los fps (10 s → 7 fps). La escalera de la spec 003 (D6) sigue bajando desde ahí si no entra en 500 KB. | Santi (2026-11-13) |
 | D5 | Los GIF conservan su transparencia (si el GIF tiene fondo transparente, el sticker también). | Santi (2026-11-13) |
 | D6 | GIF de más de 20 MB no se aceptan (se avisa). | Santi (2026-11-13) |
