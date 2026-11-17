@@ -135,3 +135,4 @@ Ninguna.
 | 2026-11-17 | "apruebo todas, la 2 intenta quitarle las metricas como decis" | D1 a D5. |
 | 2026-11-17 | "No encontre un tweet que tenga varios videos […] igualemnte deja implementado la de agarrar el primer video. CUalquier cosa cuando encuentre uno lo pruebo y te digo" | D4; sin test con un tweet real de varios videos (no verificado). |
 | 2026-11-17 | Pasó un link con video y uno con GIF; "Aprobada" | Estado: aprobada; D6 confirmada; los links se usan en P0. |
+| 2026-11-17 | Después de probarlo: "NAA un LUJO anda perfecto!" | P3 commiteada. Verificado: 96 tests unitarios, 51 instrumentados (incluye bajar de X de verdad) y prueba manual de Santi con sus dos links, compartiendo y pegando. |

@@ -36,6 +36,10 @@ import com.santi.stickers.image.VideoFrames
 import com.santi.stickers.image.VideoSource
 import com.santi.stickers.share.SharedKind
 import com.santi.stickers.share.sharedKind
+import com.santi.stickers.x.XDownload
+import com.santi.stickers.x.XDownloader
+import com.santi.stickers.x.XLinks
+import java.io.File
 import com.santi.stickers.whatsapp.AddPackOutcome
 import com.santi.stickers.whatsapp.AddPackRequest
 import com.santi.stickers.whatsapp.WhatsApp
@@ -53,6 +57,9 @@ sealed interface Screen {
 
     /** Spec 004: pantalla de un pack. */
     data class Pack(val packId: String) : Screen
+
+    /** Spec 007: bajando el video de un tweet ([progress] de 0 a 1). */
+    data class Downloading(val progress: Float) : Screen
 
     /** Spec 006: algo compartido desde otra app, esperando que se elija el pack. */
     data class ChoosePack(val uri: Uri, val kind: SharedKind) : Screen
@@ -109,6 +116,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var cropJob: Job? = null
     private var removeJob: Job? = null
     private val backgroundRemover: BackgroundRemover = MlKitBackgroundRemover()
+
+    init {
+        // Spec 007, D6: videos de X que hayan quedado de otra vez (más de una hora, para no tocar los de otra pantalla abierta).
+        viewModelScope.launch(Dispatchers.IO) { XDownloader.clearCache(getApplication(), olderThanMs = 60 * 60 * 1000L) }
+    }
 
     override fun onCleared() {
         backgroundRemover.close()
@@ -211,7 +223,80 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun cancelShared() {
+        discardDownload()
         screen = Screen.Home
+    }
+
+    // --- Links de X (spec 007) ---
+
+    private var downloadJob: Job? = null
+    private var downloadReturn: Screen = Screen.Home
+
+    /** D6: el video bajado, para borrarlo al terminar o cancelar. */
+    private var downloadedFile: File? = null
+
+    /** D3, RN-1, RN-2: texto compartido (desde X). Va a "¿A qué pack?" después de bajar. */
+    fun onSharedText(text: String?) {
+        val id = text?.let(XLinks::statusId) ?: return message("Eso no es un link de X.")
+        targetPackId = null
+        download(id, intoPack = false)
+    }
+
+    /** D3, RN-7: "Pegar link de X" desde un pack animado ([tryStartNewSticker] ya eligió el pack). */
+    fun onPastedLink(text: String?) {
+        val id = text?.let(XLinks::statusId) ?: return message("No copiaste un link de X.")
+        download(id, intoPack = true)
+    }
+
+    /** RN-5, RN-6, AC-4. */
+    private fun download(statusId: String, intoPack: Boolean) {
+        discardDownload()
+        downloadJob?.cancel()
+        downloadReturn = screen
+        screen = Screen.Downloading(0f)
+        downloadJob = viewModelScope.launch {
+            val context = getApplication<Application>()
+            val result = XDownloader.download(context, statusId) { p ->
+                viewModelScope.launch { (screen as? Screen.Downloading)?.let { screen = it.copy(progress = p) } }
+            }
+            if (screen !is Screen.Downloading) {
+                (result as? XDownload.Ok)?.file?.delete() // se canceló justo al terminar
+                return@launch
+            }
+            fun fail(text: String) {
+                screen = downloadReturn
+                message(text)
+            }
+            when (result) {
+                is XDownload.Ok -> {
+                    Log.i(TAG, "bajado ${result.file.length() / 1024} KB, gif=${result.isGif}")
+                    downloadedFile = result.file
+                    if (result.more) message("El tweet tiene varios videos: se usó el primero.") // D4
+                    val uri = Uri.fromFile(result.file)
+                    if (intoPack) {
+                        backToPack()
+                        startVideo(uri)
+                    } else {
+                        screen = Screen.ChoosePack(uri, SharedKind.VIDEO)
+                    }
+                }
+                XDownload.NoConnection -> fail("No hay conexión.")
+                XDownload.Unreadable -> fail("No se pudo leer ese tweet. Puede ser privado o haberse borrado.")
+                XDownload.NoVideo -> fail("Ese tweet no tiene video ni GIF.")
+                XDownload.TooBig -> fail("Ese video pesa más de ${XDownloader.MAX_BYTES / (1024 * 1024)} MB.") // D5
+            }
+        }
+    }
+
+    /** AC-4. */
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        if (screen is Screen.Downloading) screen = downloadReturn
+    }
+
+    private fun discardDownload() {
+        downloadedFile?.delete()
+        downloadedFile = null
     }
 
     /** AC-5 y AC-6 (spec 004): con el pack lleno no se abre el selector. */
@@ -308,6 +393,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** AC-4. */
     fun cancelTrim() {
+        discardDownload()
         trimPreviewJob?.cancel()
         cropJob?.cancel()
         backToPack()
@@ -379,6 +465,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** AC-5 (spec 001); AC-7 (spec 002) y AC-5 (spec 003): también corta quitar fondo o la generación en curso. */
     fun cancelCrop() {
+        if (!saving) discardDownload()
         if (saving) return
         cropJob?.cancel()
         removeJob?.cancel()
@@ -444,6 +531,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Después de guardar se vuelve a la pantalla del pack (AC-5). */
     private fun onAdded(result: AddResult) {
+        discardDownload()
         when (result) {
             is AddResult.Added -> {
                 screen = Screen.Pack(result.pack.identifier)

@@ -38,13 +38,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Spec 006: aparece en "Compartir" con fotos, videos y GIF (D1, D4). Sin texto, así no aparece con links (D5). -->
+            <!-- Spec 006: aparece en "Compartir" con fotos, videos y GIF (D1, D4). El texto (links de X) llegó con la spec 007. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+            </intent-filter>
+            <!-- Spec 007, D3: texto compartido, para los links de X (si no es de X, se avisa: RN-2). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 
