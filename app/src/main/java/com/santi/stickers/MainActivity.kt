@@ -1,6 +1,8 @@
 package com.santi.stickers
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -26,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.santi.stickers.data.Packs
 import com.santi.stickers.ui.AnimatedSourceDialog
+import com.santi.stickers.ui.ChoosePackScreen
 import com.santi.stickers.ui.CropScreen
 import com.santi.stickers.ui.HomeScreen
 import com.santi.stickers.ui.MainViewModel
@@ -46,12 +49,46 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Spec 006, RN-5: lo compartido se lee solo al crear la pantalla, no al recrearla (por ejemplo, al girar).
+        if (savedInstanceState == null) readShared(intent)
         setContent {
             StickersTheme {
                 App(viewModel)
             }
         }
     }
+
+    /** Spec 006: ACTION_SEND / ACTION_SEND_MULTIPLE con fotos, videos o GIF (D1, D4). */
+    private fun readShared(intent: Intent) {
+        val uris: List<Uri> = when (intent.action) {
+            Intent.ACTION_SEND -> listOfNotNull(streamExtra(intent))
+            Intent.ACTION_SEND_MULTIPLE -> streamListExtra(intent)
+            else -> return
+        }.ifEmpty {
+            // Algunas apps solo lo ponen en el ClipData.
+            intent.clipData?.let { clip -> (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri } }.orEmpty()
+        }
+        val uri = uris.firstOrNull()
+        // RN-1: primero el tipo que informa el sistema para ese archivo; si no, el que dice quien comparte.
+        val mime = uri?.let { runCatching { contentResolver.getType(it) }.getOrNull() } ?: intent.type
+        viewModel.onShared(uri, mime, more = uris.size > 1)
+    }
+
+    private fun streamExtra(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
+
+    private fun streamListExtra(intent: Intent): List<Uri> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }.orEmpty()
 
     override fun onResume() {
         super.onResume()
@@ -116,6 +153,16 @@ private fun App(viewModel: MainViewModel) {
             onSave = { photo, crop, frame ->
                 if (screen.video != null) viewModel.saveAnimated(crop, frame) else viewModel.saveSticker(photo, crop, frame)
             },
+        )
+        is Screen.ChoosePack -> ChoosePackScreen(
+            state = screen,
+            home = viewModel.home,
+            packDir = repository::packDir,
+            snackbar = snackbar,
+            suggestedName = viewModel::suggestedName,
+            onChoose = viewModel::chooseSharedPack,
+            onCreatePack = viewModel::createPackForShared,
+            onCancel = viewModel::cancelShared,
         )
         is Screen.Trim -> TrimScreen(
             state = screen,

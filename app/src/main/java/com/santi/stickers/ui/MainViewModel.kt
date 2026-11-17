@@ -34,6 +34,8 @@ import com.santi.stickers.image.StickerImages
 import com.santi.stickers.image.TrimMath
 import com.santi.stickers.image.VideoFrames
 import com.santi.stickers.image.VideoSource
+import com.santi.stickers.share.SharedKind
+import com.santi.stickers.share.sharedKind
 import com.santi.stickers.whatsapp.AddPackOutcome
 import com.santi.stickers.whatsapp.AddPackRequest
 import com.santi.stickers.whatsapp.WhatsApp
@@ -51,6 +53,9 @@ sealed interface Screen {
 
     /** Spec 004: pantalla de un pack. */
     data class Pack(val packId: String) : Screen
+
+    /** Spec 006: algo compartido desde otra app, esperando que se elija el pack. */
+    data class ChoosePack(val uri: Uri, val kind: SharedKind) : Screen
 
     /**
      * [photo] es null mientras se decodifica. Spec 002: [removal] guarda el recorte ya calculado (D9),
@@ -160,6 +165,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // --- Crear sticker ---
+
+    // --- Compartido desde otra app (spec 006) ---
+
+    /** RN-1, AC-6, AC-8: abre "¿A qué pack?". La Activity lo llama una sola vez por cada envío (RN-5). */
+    fun onShared(uri: Uri?, mime: String?, more: Boolean) {
+        val kind = sharedKind(mime)
+        when {
+            uri == null -> message("No se pudo abrir lo que compartiste.")
+            kind == null -> message("Ese archivo no sirve para stickers.")
+            else -> {
+                if (more) message("Se usó solo el primer archivo.") // D4
+                Log.i(TAG, "compartido $kind $mime")
+                screen = Screen.ChoosePack(uri, kind)
+            }
+        }
+    }
+
+    /** AC-3, AC-5: sigue con el encuadre o el tramo, como desde "+ Nuevo sticker". */
+    fun chooseSharedPack(packId: String) {
+        val shared = screen as? Screen.ChoosePack ?: return
+        val pack = repository.load().packs.firstOrNull { it.identifier == packId } ?: return
+        if (pack.isFull || pack.animated != shared.kind.animated) return // la pantalla no deja elegirlos
+        targetPackId = packId
+        when (shared.kind) {
+            SharedKind.PHOTO -> startCrop(shared.uri)
+            SharedKind.VIDEO -> startVideo(shared.uri)
+            SharedKind.GIF -> startGif(shared.uri)
+        }
+    }
+
+    /** D3, AC-4, RN-4: crea el pack con el tipo ya elegido y sigue con ese pack. */
+    fun createPackForShared(name: String) {
+        val shared = screen as? Screen.ChoosePack ?: return
+        viewModelScope.launch {
+            when (val r = withContext(Dispatchers.IO) { repository.createPack(name, shared.kind.animated) }) {
+                is CreatePackResult.Created -> {
+                    refresh()
+                    chooseSharedPack(r.pack.identifier)
+                }
+                CreatePackResult.LimitReached -> message("Llegaste al máximo de ${PackRules.MAX_PACKS} packs.")
+                CreatePackResult.InvalidName -> message("El nombre no puede estar vacío ni pasar de ${PackRules.MAX_NAME_LENGTH} letras.")
+            }
+        }
+    }
+
+    fun cancelShared() {
+        screen = Screen.Home
+    }
 
     /** AC-5 y AC-6 (spec 004): con el pack lleno no se abre el selector. */
     fun tryStartNewSticker(packId: String, openPicker: (animated: Boolean) -> Unit) {
