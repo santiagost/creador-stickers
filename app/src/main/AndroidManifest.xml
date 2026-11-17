@@ -7,11 +7,10 @@
         <package android:name="com.whatsapp" />
     </queries>
 
-    <!-- Spec 002, D13: ML Kit trae datatransport, que pide red para mandar métricas de uso a Google.
-         La app no necesita internet (el modelo lo baja Play services), así que se quitan. -->
-    <uses-permission
-        android:name="android.permission.INTERNET"
-        tools:node="remove" />
+    <!-- Spec 007, D2: internet solo para bajar videos de links de X. ML Kit trae datatransport, que manda
+         métricas de uso a Google: se le quita el componente que las sube (TransportBackendDiscovery, abajo).
+         ACCESS_NETWORK_STATE sigue quitado (spec 002, D13). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
@@ -39,7 +38,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Spec 006: aparece en "Compartir" con fotos, videos y GIF (D1, D4). Sin texto, así no aparece con links (D5). -->
+            <!-- Spec 006: aparece en "Compartir" con fotos, videos y GIF (D1, D4). El texto (links de X) llegó con la spec 007. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
@@ -47,7 +46,18 @@
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
             </intent-filter>
+            <!-- Spec 007, D3: texto compartido, para los links de X (si no es de X, se avisa: RN-2). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
+
+        <!-- Spec 007, D2: sin este servicio, datatransport no encuentra cómo subir las métricas de ML Kit. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
 
         <!-- Contrato de WhatsApp (spec 001, secciones 8 y 10): exportado, solo lectura con el permiso de WhatsApp. -->
         <provider

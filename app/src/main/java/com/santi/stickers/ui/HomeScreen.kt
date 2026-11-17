@@ -252,19 +252,21 @@ private fun NewPackDialog(
     )
 }
 
-/** Spec 005, D2: en un pack animado, el sticker nuevo sale de un video o de un GIF. */
+/** Spec 005, D2: en un pack animado, el sticker nuevo sale de un video o de un GIF; spec 007, D3: o de un link de X. */
 @Composable
-fun AnimatedSourceDialog(onVideo: () -> Unit, onGif: () -> Unit, onDismiss: () -> Unit) {
+fun AnimatedSourceDialog(onVideo: () -> Unit, onGif: () -> Unit, onPasteLink: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuevo sticker animado") },
-        text = { Text("¿Desde dónde?") },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onVideo) { Text("Video") }
-                TextButton(onClick = onGif) { Text("GIF") }
+        text = {
+            Column {
+                Text("¿Desde dónde?")
+                listOf("Video" to onVideo, "GIF" to onGif, "Pegar link de X" to onPasteLink).forEach { (label, action) ->
+                    TextButton(onClick = action, modifier = Modifier.fillMaxWidth()) { Text(label) }
+                }
             }
         },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }

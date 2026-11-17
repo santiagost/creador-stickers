@@ -1,6 +1,7 @@
 package com.santi.stickers
 
 import android.content.ActivityNotFoundException
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -30,6 +31,7 @@ import com.santi.stickers.data.Packs
 import com.santi.stickers.ui.AnimatedSourceDialog
 import com.santi.stickers.ui.ChoosePackScreen
 import com.santi.stickers.ui.CropScreen
+import com.santi.stickers.ui.DownloadScreen
 import com.santi.stickers.ui.HomeScreen
 import com.santi.stickers.ui.MainViewModel
 import com.santi.stickers.ui.PackScreen
@@ -60,6 +62,11 @@ class MainActivity : ComponentActivity() {
 
     /** Spec 006: ACTION_SEND / ACTION_SEND_MULTIPLE con fotos, videos o GIF (D1, D4). */
     private fun readShared(intent: Intent) {
+        // Spec 007, D3: texto (un link de X).
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true && streamExtra(intent) == null) {
+            viewModel.onSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))
+            return
+        }
         val uris: List<Uri> = when (intent.action) {
             Intent.ACTION_SEND -> listOfNotNull(streamExtra(intent))
             Intent.ACTION_SEND_MULTIPLE -> streamListExtra(intent)
@@ -164,6 +171,7 @@ private fun App(viewModel: MainViewModel) {
             onCreatePack = viewModel::createPackForShared,
             onCancel = viewModel::cancelShared,
         )
+        is Screen.Downloading -> DownloadScreen(state = screen, onCancel = viewModel::cancelDownload)
         is Screen.Trim -> TrimScreen(
             state = screen,
             onRangeChange = viewModel::setTrimRange,
@@ -189,6 +197,7 @@ private fun PackScreenFor(
     sendToWhatsApp: ActivityResultLauncher<AddPackRequest>,
 ) {
     val packId = status.pack.identifier
+    val context = LocalContext.current
     var choosingSource by remember { mutableStateOf(false) }
     if (choosingSource) {
         // Spec 005, D2 y AC-1.
@@ -200,6 +209,13 @@ private fun PackScreenFor(
             onGif = {
                 choosingSource = false
                 pickers.gif.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.SingleMimeType("image/gif")))
+            },
+            onPasteLink = {
+                // Spec 007, RN-7: el portapapeles se lee solo al tocar (Android avisa que se pegó).
+                choosingSource = false
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                val text = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
+                viewModel.onPastedLink(text)
             },
             onDismiss = { choosingSource = false },
         )
