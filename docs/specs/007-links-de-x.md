@@ -31,7 +31,7 @@ Santi quiere hacer stickers con videos y GIF de X. La app de X solo comparte el 
 | D3 | El link entra de dos formas: compartiendo texto desde X (la app pasa a aparecer al compartir texto) y con "Pegar link de X" en el menú "Video / GIF" de un pack animado. | Santi (2026-11-17) |
 | D4 | Si el tweet tiene varios videos, se usa el primero y se avisa. | Santi (2026-11-17) |
 | D5 | Se baja el MP4 de mejor calidad de hasta 720p (el sticker sale a 512x512). Si pesa más de 50 MB, se avisa y no se baja. | Santi (2026-11-17) |
-| D6 | El video bajado se guarda en la caché de la app y se borra al terminar o cancelar (y lo que quede, al abrir la app). | Santi (2026-11-17) |
+| D6 | El video bajado se guarda en la caché de la app y se borra al terminar o cancelar (y lo que quede, al abrir la app: los de más de una hora, para no borrar el de otra pantalla de la app abierta al mismo tiempo). | Santi (2026-11-17) |
 
 **Verificado el 2026-11-17 desde la PC:**
 - La dirección de D1 responde (HTTP 200) con dos tweets de video de NASA (Artemis II y Roman): trae `mediaDetails` con `type: "video"`, la duración y los MP4 en 270p, 360p, 720p, 1080p y 4K, más una lista HLS (que no se usa).
@@ -42,6 +42,7 @@ Santi quiere hacer stickers con videos y GIF de X. La app de X solo comparte el 
 **Verificado en P0 (2026-11-17):**
 - Con los links de Santi: el de video viene como `type: "video"` (7,7 s, MP4 de 366x270, 488x360 y 976x720); el "GIF" como `type: "animated_gif"`, con un solo MP4 de `video.twimg.com/tweet_video/…` con bitrate 0 y sin resolución en la dirección (62 KB). RN-4 elige ese único MP4.
 - Con internet y sin `TransportBackendDiscovery` en el S20 FE: "Quitar fondo" anda (5 tests de quitar fondo OK) y datatransport registra `Transport backend 'cct' is not registered`, o sea, descarta las métricas en vez de subirlas. La app no tiene trabajos de subida programados (otras apps del teléfono sí).
+- **Hallazgo de P2:** el MP4 del "GIF" de X se baja bien (es H.264 válido, 200x200, 3,1 s), pero Android no ve ninguna pista: su caja `ctts` trae flags = 1 y el lector de MP4 de Android (AOSP) exige versión y flags en 0 o rechaza el archivo. Probado con variantes en el teléfono: sin `ctts`, o con flags = 0, se lee bien; cambiar la escala de tiempo, la marca o quitar `edts` no alcanza. Solución (`Mp4Fix`): después de bajar, poner esos flags en 0 (3 bytes, sin recodificar; los flags de `ctts` no tienen significado en el estándar).
 - Para los tests se guardaron las respuestas recortadas (solo el tipo y los videos, sin texto ni usuario) en `app/src/test/resources/x/`.
 
 ## 5. Reglas de negocio
@@ -110,8 +111,8 @@ object XDownloader {
 |---|---|---|---|
 | P0 | Manifest (internet y quitar el componente de métricas) y prueba en el teléfono de que "Quitar fondo" anda; leer un tweet con "GIF" (link de Santi) desde la PC. Se anota el resultado acá. | Manual + los instrumentados de quitar fondo. | AC-7 |
 | P1 | `XLinks`: link → número, token, elección del video desde el JSON (con respuestas guardadas de la prueba). | Unitarios. | RN-1 a RN-4 |
-| P2 | `XDownloader` + recibir texto en el manifest. | Instrumentado contra X real (un tweet de NASA), marcado como "necesita internet". | AC-6, AC-8 |
-| P3 | UI: "Bajando video…", recibir texto, "Pegar link de X". Un commit cuando Santi confirme. | Manual con los ACs. | AC-1 a AC-5 |
+| P2 | `XDownloader` y `Mp4Fix` (arreglo de los "GIF" de X). | Instrumentado contra X real (un tweet de NASA), marcado como "necesita internet". | AC-6, AC-8 |
+| P3 | UI: "Bajando video…", recibir texto (manifest), "Pegar link de X". Un commit cuando Santi confirme. | Manual con los ACs. | AC-1 a AC-5 |
 
 ## 13. Riesgos
 
