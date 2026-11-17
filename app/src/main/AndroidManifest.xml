@@ -39,6 +39,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Spec 006: aparece en "Compartir" con fotos, videos y GIF (D1, D4). Sin texto, así no aparece con links (D5). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
         </activity>
 
         <!-- Contrato de WhatsApp (spec 001, secciones 8 y 10): exportado, solo lectura con el permiso de WhatsApp. -->

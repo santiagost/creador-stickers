@@ -113,3 +113,4 @@ Ninguna.
 | 2026-11-17 | "creo que no se manda el video deberiamos probar pero sino una forma como snaptube que si descargar videos o gifs si se los comparte desde el link de X. Vamos primero con la parte 1" | Esta spec; links de X a la parte 2. Se probó qué manda X (sección 4). |
 | 2026-11-17 | "Dale te apruebo todas" (las 6 recomendaciones) | D1 a D5. |
 | 2026-11-17 | "Sí, aprobada" (con D6 como estaba) | Estado: aprobada; D6 confirmada. |
+| 2026-11-17 | Después de probarlo: "Todo bien, commiteá" | P2 commiteada. Verificado: 79 tests unitarios, 45 instrumentados, consulta al sistema (aparece con video/GIF/foto y varios archivos; no con texto) y prueba manual de Santi. |

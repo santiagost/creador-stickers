@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,6 +53,8 @@ import com.santi.stickers.data.PackRules
 import com.santi.stickers.data.PackStatus
 import com.santi.stickers.data.StickerPack
 import com.santi.stickers.data.SyncState
+import com.santi.stickers.share.SharedKind
+import com.santi.stickers.share.packsFor
 import java.io.File
 
 /** Inicio: lista de packs (spec 004, sección 11). */
@@ -104,9 +107,9 @@ fun HomeScreen(
 }
 
 @Composable
-private fun PackRow(status: PackStatus, dir: File, onClick: () -> Unit) {
+private fun PackRow(status: PackStatus, dir: File, enabled: Boolean = true, onClick: () -> Unit) {
     val pack = status.pack
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    Card(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f).clickable(enabled = enabled, onClick = onClick)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
@@ -118,7 +121,7 @@ private fun PackRow(status: PackStatus, dir: File, onClick: () -> Unit) {
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(packTitle(pack), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${pack.stickers.size}/${PackRules.MAX_STICKERS} · ${statusText(status)}",
+                    if (enabled) "${pack.stickers.size}/${PackRules.MAX_STICKERS} · ${statusText(status)}" else "lleno (${PackRules.MAX_STICKERS}/${PackRules.MAX_STICKERS})",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -127,24 +130,100 @@ private fun PackRow(status: PackStatus, dir: File, onClick: () -> Unit) {
     }
 }
 
-/** AC-2: tipo + nombre sugerido (D2). El nombre sugerido sigue al tipo mientras no se lo edite. */
+/** Spec 006, sección 11: elegir a qué pack va lo compartido (RN-2, D3). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChoosePackScreen(
+    state: Screen.ChoosePack,
+    home: HomeState,
+    packDir: (packId: String) -> File,
+    snackbar: SnackbarHostState,
+    suggestedName: (animated: Boolean) -> String,
+    onChoose: (packId: String) -> Unit,
+    onCreatePack: (name: String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    BackHandler(onBack = onCancel)
+    var creating by remember { mutableStateOf(false) }
+    val packs = home.packs.filter { it.pack in packsFor(state.kind, home.packs.map { s -> s.pack }) }
+    val what = when (state.kind) {
+        SharedKind.PHOTO -> "la foto"
+        SharedKind.VIDEO -> "el video"
+        SharedKind.GIF -> "el GIF"
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                navigationIcon = { TextButton(onClick = onCancel) { Text("Cancelar") } },
+                title = { Text("¿A qué pack?") },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(onClick = { creating = true }) { Text("+  Nuevo pack") }
+        },
+    ) { padding ->
+        when {
+            home.loading -> Box(Modifier.fillMaxSize().padding(padding), Alignment.Center) { CircularProgressIndicator() }
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Text(
+                        if (packs.isEmpty()) {
+                            if (state.kind.animated) "No tenés packs animados. Creá uno para $what." else "No tenés packs normales. Creá uno para $what."
+                        } else {
+                            "Elegí el pack para $what."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                items(packs, key = { it.pack.identifier }) { status ->
+                    // AC-5: los llenos se ven pero no se eligen.
+                    PackRow(status, packDir(status.pack.identifier), enabled = !status.pack.isFull) { onChoose(status.pack.identifier) }
+                }
+            }
+        }
+    }
+
+    if (creating) {
+        NewPackDialog(
+            suggestedName = suggestedName,
+            fixedAnimated = state.kind.animated,
+            onDismiss = { creating = false },
+            onCreate = { name, _ ->
+                creating = false
+                onCreatePack(name)
+            },
+        )
+    }
+}
+
+/**
+ * AC-2: tipo + nombre sugerido (D2). El nombre sugerido sigue al tipo mientras no se lo edite.
+ * Spec 006, D3: con [fixedAnimated] el tipo ya viene elegido y no se muestra.
+ */
 @Composable
 private fun NewPackDialog(
     suggestedName: (animated: Boolean) -> String,
     onDismiss: () -> Unit,
     onCreate: (name: String, animated: Boolean) -> Unit,
+    fixedAnimated: Boolean? = null,
 ) {
-    var animated by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf(suggestedName(false)) }
+    var animated by remember { mutableStateOf(fixedAnimated ?: false) }
+    var name by remember { mutableStateOf(suggestedName(animated)) }
     var edited by remember { mutableStateOf(false) }
     val valid = name.trim().isNotEmpty() && name.trim().length <= PackRules.MAX_NAME_LENGTH
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuevo pack") },
+        title = { Text(if (fixedAnimated == null) "Nuevo pack" else if (fixedAnimated) "Nuevo pack animado" else "Nuevo pack normal") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                listOf(false to "Normal (fotos)", true to "Animado (videos o GIF)").forEach { (value, label) ->
+                if (fixedAnimated == null) listOf(false to "Normal (fotos)", true to "Animado (videos o GIF)").forEach { (value, label) ->
                     Row(
                         Modifier.fillMaxWidth().selectable(selected = animated == value) {
                             animated = value
