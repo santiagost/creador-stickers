@@ -87,3 +87,17 @@ sealed interface DeleteResult {
     data object BelowMinimum : DeleteResult
     data object NotFound : DeleteResult
 }
+
+/** Spec 008. */
+sealed interface DeletePackResult {
+    data class Deleted(val pack: StickerPack) : DeletePackResult
+    data object NotFound : DeletePackResult
+}
+
+/** Spec 008. */
+sealed interface RenameResult {
+    data class Renamed(val pack: StickerPack) : RenameResult
+    data object Unchanged : RenameResult
+    data object InvalidName : RenameResult
+    data object NotFound : RenameResult
+}

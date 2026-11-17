@@ -109,6 +109,32 @@ class PackRepository(
     }
 
     /**
+     * Spec 008, D1, RN-1: saca el pack de la lista y después borra su carpeta (orden de la sección 9).
+     * D5: también borra carpetas `pack_N` que ya no están en la lista (restos).
+     */
+    fun deletePack(packId: String): DeletePackResult = synchronized(lock) {
+        val index = load()
+        val pack = index.packs.firstOrNull { it.identifier == packId } ?: return DeletePackResult.NotFound
+        val remaining = index.packs - pack
+        save(index.copy(packs = remaining)) // nextPackNumber no cambia: no se reutilizan números (D4)
+        val keep = remaining.map { it.identifier }.toSet()
+        root.listFiles { f -> f.isDirectory && PACK_DIR.matches(f.name) && f.name !in keep }?.forEach { it.deleteRecursively() }
+        DeletePackResult.Deleted(pack)
+    }
+
+    /** Spec 008, D3, RN-3: mismas reglas que al crear; si cambia, sube la versión para poder actualizar en WhatsApp. */
+    fun renamePack(packId: String, name: String): RenameResult = synchronized(lock) {
+        val clean = name.trim()
+        if (clean.isEmpty() || clean.length > PackRules.MAX_NAME_LENGTH) return RenameResult.InvalidName
+        val index = load()
+        val pack = index.packs.firstOrNull { it.identifier == packId } ?: return RenameResult.NotFound
+        if (pack.name == clean) return RenameResult.Unchanged
+        val updated = pack.copy(name = clean, imageDataVersion = pack.imageDataVersion + 1)
+        save(index.copy(packs = index.packs.map { if (it.identifier == packId) updated else it }))
+        RenameResult.Renamed(updated)
+    }
+
+    /**
      * RN-8: WhatsApp respondió add_successful al intent enviado con [sentVersion].
      * Se guarda la versión enviada, no la actual: si se agregó un sticker mientras el diálogo estaba abierto,
      * el pack tiene que seguir "para actualizar".
@@ -140,5 +166,6 @@ class PackRepository(
 
     private companion object {
         const val INDEX_FILE = "index.json"
+        val PACK_DIR = Regex("""pack_\d+""")
     }
 }
