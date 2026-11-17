@@ -1,6 +1,7 @@
 package com.santi.stickers.ui
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -18,15 +19,21 @@ import com.santi.stickers.data.PackStatus
 import com.santi.stickers.data.Packs
 import com.santi.stickers.data.packStatuses
 import com.santi.stickers.image.AnimatedResult
+import com.santi.stickers.image.AnimationSource
 import com.santi.stickers.image.AnimatedWebp
 import com.santi.stickers.image.BackgroundRemover
+import com.santi.stickers.image.ClipRange
 import com.santi.stickers.image.CropMath
 import com.santi.stickers.image.CropTransform
+import com.santi.stickers.image.GifFrames
+import com.santi.stickers.image.GifSource
+import com.santi.stickers.image.GifTooLargeException
 import com.santi.stickers.image.MlKitBackgroundRemover
 import com.santi.stickers.image.RemovalResult
 import com.santi.stickers.image.StickerImages
+import com.santi.stickers.image.TrimMath
 import com.santi.stickers.image.VideoFrames
-import com.santi.stickers.image.VideoInfo
+import com.santi.stickers.image.VideoSource
 import com.santi.stickers.whatsapp.AddPackOutcome
 import com.santi.stickers.whatsapp.AddPackRequest
 import com.santi.stickers.whatsapp.WhatsApp
@@ -63,12 +70,12 @@ sealed interface Screen {
         val shown: Bitmap? get() = if (showSubject) removal?.subject else photo
     }
 
-    /** Spec 003: elegir desde dónde arranca el tramo. [preview] es null mientras carga el primer cuadro. */
-    data class Trim(val uri: Uri, val info: VideoInfo, val startMs: Long, val preview: Bitmap?) : Screen
+    /** Spec 003/005: elegir el tramo. [preview] es el cuadro donde arranca; null mientras carga. */
+    data class Trim(val source: AnimationSource, val range: ClipRange, val preview: Bitmap?) : Screen
 }
 
 /** Spec 003: el tramo elegido de un video. */
-data class VideoClip(val uri: Uri, val info: VideoInfo, val startMs: Long)
+data class VideoClip(val source: AnimationSource, val range: ClipRange)
 
 data class HomeState(
     val loading: Boolean = true,
@@ -170,45 +177,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var trimPreviewJob: Job? = null
     private var generateJob: Job? = null
 
-    /** AC-1/AC-2: abre la pantalla de tramo con el cuadro del principio. */
-    fun startVideo(uri: Uri) {
+    /** AC-1/AC-2 (spec 003): abre la pantalla de tramo con el cuadro del principio. */
+    fun startVideo(uri: Uri) = startAnimation(uri, what = "ese video") { VideoSource(uri, VideoFrames.info(it, uri)) }
+
+    /** Spec 005, AC-7 y AC-8: lo mismo desde un GIF. */
+    fun startGif(uri: Uri) = startAnimation(uri, what = "ese GIF") { GifSource(uri, GifFrames.info(it, uri)) }
+
+    private fun startAnimation(uri: Uri, what: String, open: (Context) -> AnimationSource) {
         cropJob?.cancel()
         cropJob = viewModelScope.launch {
             val context = getApplication<Application>()
-            val info = withContext(Dispatchers.IO) {
-                runCatching { VideoFrames.info(context, uri) }
-                    .onFailure { Log.w(TAG, "No se pudo abrir el video $uri", it) }
-                    .getOrNull()
+            val source = withContext(Dispatchers.IO) {
+                runCatching { open(context) }
+                    .onFailure { Log.w(TAG, "No se pudo abrir $uri", it) }
             }
+            val opened = source.getOrNull()
             when {
-                info == null -> message("No se pudo abrir ese video.")
-                VideoFrames.frameCount(info, 0) < 2 -> message("Ese video es demasiado corto.") // RN-2
+                source.exceptionOrNull() is GifTooLargeException -> message("Ese GIF pesa más de 20 MB.") // D6
+                opened == null -> message("No se pudo abrir $what.") // AC-8
+                opened is GifSource && opened.info.timeline.frameCount < 2 -> message("Ese GIF no es animado.")
+                TrimMath.frameCount(TrimMath.initial(opened.durationMs).lengthMs) < 2 -> message("Es demasiado corto.") // RN-2
                 else -> {
-                    Log.i(TAG, "video $info")
-                    screen = Screen.Trim(uri, info, startMs = 0, preview = null)
+                    Log.i(TAG, "animación $opened")
+                    screen = Screen.Trim(opened, TrimMath.initial(opened.durationMs), preview = null)
                     loadTrimPreview(exact = true)
                 }
             }
         }
     }
 
-    /** AC-2: al mover la barra se muestra el cuadro clave más cercano (rápido); al soltar, el exacto. */
-    fun setTrimStart(startMs: Long, exact: Boolean) {
+    /**
+     * Spec 005, AC-2 a AC-5: la pantalla calcula la caja con [TrimMath]. Mientras se arrastra se muestra un cuadro
+     * rápido; al soltar, el exacto.
+     */
+    fun setTrimRange(range: ClipRange, exact: Boolean) {
         val trim = screen as? Screen.Trim ?: return
-        screen = trim.copy(startMs = startMs.coerceIn(0, VideoFrames.maxStart(trim.info)))
-        loadTrimPreview(exact)
+        screen = trim.copy(range = range)
+        if (exact || range.startMs != trim.range.startMs) loadTrimPreview(exact)
     }
+
+    /** Los cuadros de muestra se leen de a uno; si llega otro pedido, los que esperaban se descartan. */
+    private val previewDispatcher = Dispatchers.IO.limitedParallelism(1)
 
     private fun loadTrimPreview(exact: Boolean) {
         val trim = screen as? Screen.Trim ?: return
         trimPreviewJob?.cancel()
         trimPreviewJob = viewModelScope.launch {
             val context = getApplication<Application>()
-            val frame = withContext(Dispatchers.IO) {
-                runCatching { VideoFrames.frameAt(context, trim.uri, trim.info, trim.startMs, exact) }.getOrNull()
+            val frame = withContext(previewDispatcher) {
+                runCatching { trim.source.frameAt(context, trim.range.startMs, exact) }.getOrNull()
             } ?: return@launch
             val current = screen as? Screen.Trim ?: return@launch
-            if (current.uri == trim.uri && current.startMs == trim.startMs) screen = current.copy(preview = frame)
+            if (current.source == trim.source && current.range.startMs == trim.range.startMs) screen = current.copy(preview = frame)
         }
     }
 
@@ -216,17 +236,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun confirmTrim() {
         val trim = screen as? Screen.Trim ?: return
         trimPreviewJob?.cancel()
-        val clip = VideoClip(trim.uri, trim.info, trim.startMs)
+        val clip = VideoClip(trim.source, trim.range)
         screen = Screen.Crop(photo = null, video = clip)
         cropJob = viewModelScope.launch {
             val context = getApplication<Application>()
             val first = withContext(Dispatchers.IO) {
-                runCatching { VideoFrames.frameAt(context, clip.uri, clip.info, clip.startMs, exact = true) }.getOrNull()
+                runCatching { clip.source.frameAt(context, clip.range.startMs, exact = true) }.getOrNull()
             }
             if ((screen as? Screen.Crop)?.video != clip) return@launch
             if (first == null) {
                 backToPack()
-                message("No se pudo leer el video.")
+                message("No se pudo leer el archivo.")
             } else {
                 screen = Screen.Crop(photo = first, video = clip)
             }
@@ -250,7 +270,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val context = getApplication<Application>()
             val result = withContext(Dispatchers.Default) {
                 runCatching {
-                    AnimatedWebp.fromVideo(context, clip.uri, clip.info, clip.startMs, crop, frameSize) { p ->
+                    AnimatedWebp.fromSource(context, clip.source, clip.range, crop, frameSize) { p ->
                         ensureActive() // "Cancelar" corta en el próximo cuadro
                         viewModelScope.launch {
                             (screen as? Screen.Crop)?.takeIf { it.video == clip && it.generating != null }

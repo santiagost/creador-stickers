@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.subject.segmentation)
     implementation(libs.webp.android)
+    implementation(libs.gifdecoder)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

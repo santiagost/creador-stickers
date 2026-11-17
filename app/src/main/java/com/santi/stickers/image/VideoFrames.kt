@@ -25,8 +25,6 @@ data class VideoInfo(val durationMs: Long, val width: Int, val height: Int, val 
  * Son operaciones pesadas: llamarlas fuera del hilo principal.
  */
 object VideoFrames {
-    const val FPS = 15
-    const val CLIP_MS = 3000L // spec 003, D2
     const val WORK_MAX_SIDE = 1024
 
     /** Memoria máxima para un bloque de cuadros a resolución original (getFramesAtIndex). */
@@ -55,15 +53,6 @@ object VideoFrames {
         )
     }
 
-    /** RN-2: el tramo no puede arrancar después de esto (si el video es corto, 0). */
-    fun maxStart(info: VideoInfo): Long = (info.durationMs - CLIP_MS).coerceAtLeast(0)
-
-    /** RN-2: largo real del tramo que arranca en [startMs]. */
-    fun clipLength(info: VideoInfo, startMs: Long): Long = min(CLIP_MS, info.durationMs - startMs).coerceAtLeast(0)
-
-    /** Cantidad de cuadros que va a tener el sticker (a [FPS]). */
-    fun frameCount(info: VideoInfo, startMs: Long): Int = (clipLength(info, startMs) * FPS / 1000).toInt()
-
     /** Cuadro en [timeMs]. [exact] = el cuadro justo (más lento); si no, el cuadro clave más cercano (rápido, para la barra). */
     fun frameAt(context: Context, uri: Uri, info: VideoInfo, timeMs: Long, exact: Boolean): Bitmap = retriever(context, uri) { r ->
         val option = if (exact) MediaMetadataRetriever.OPTION_CLOSEST else MediaMetadataRetriever.OPTION_CLOSEST_SYNC
@@ -73,23 +62,25 @@ object VideoFrames {
     }
 
     /**
-     * Recorre los cuadros del tramo a [FPS] y entrega cada uno en [onFrame] (se libera después de la llamada).
-     * Primero por índice, que es mucho más rápido; si el video no lo permite, por tiempo.
+     * Recorre los cuadros de [range] a [TrimMath.fpsFor] (spec 005, RN-3) y entrega cada uno en [onFrame]
+     * (se libera después de la llamada). Primero por índice, que es mucho más rápido; si el video no lo permite, por tiempo.
      */
     fun frames(
         context: Context,
         uri: Uri,
         info: VideoInfo,
-        startMs: Long,
+        range: ClipRange,
         onProgress: (Float) -> Unit = {},
         onFrame: (index: Int, frame: Bitmap) -> Unit,
     ): Int = retriever(context, uri) { r ->
-        val count = frameCount(info, startMs)
+        require(range.startMs >= 0 && range.endMs <= info.durationMs) { "El tramo $range sale del video" }
+        val fps = TrimMath.fpsFor(range.lengthMs)
+        val count = TrimMath.frameCount(range.lengthMs)
         require(count >= 2) { "El tramo es demasiado corto" } // RN-2: WhatsApp pide 2 cuadros o más
         val byIndex = info.frameCount?.takeIf { it > 1 }?.let { total ->
-            runCatching { framesByIndex(r, info, total, startMs, count, onProgress, onFrame) }.getOrNull()
+            runCatching { framesByIndex(r, info, total, range.startMs, count, fps, onProgress, onFrame) }.getOrNull()
         }
-        byIndex ?: framesByTime(r, info, startMs, count, onProgress, onFrame)
+        byIndex ?: framesByTime(r, info, range.startMs, count, fps, onProgress, onFrame)
     }
 
     private fun framesByIndex(
@@ -98,11 +89,12 @@ object VideoFrames {
         total: Int,
         startMs: Long,
         count: Int,
+        fps: Int,
         onProgress: (Float) -> Unit,
         onFrame: (Int, Bitmap) -> Unit,
     ): Int {
         val nativeFps = total * 1000.0 / info.durationMs
-        val wanted = (0 until count).map { i -> ((startMs + i * 1000.0 / FPS) * nativeFps / 1000).roundToInt().coerceIn(0, total - 1) }
+        val wanted = (0 until count).map { i -> ((startMs + i * 1000.0 / fps) * nativeFps / 1000).roundToInt().coerceIn(0, total - 1) }
         // Cuántos cuadros a resolución original caben en memoria por bloque.
         val frameBytes = info.width.toLong() * info.height * 4
         val chunk = (CHUNK_BYTES / frameBytes).toInt().coerceIn(1, 8)
@@ -112,7 +104,7 @@ object VideoFrames {
             val n = min(chunk, wanted.last() - idx + 1)
             r.getFramesAtIndex(idx, n).forEachIndexed { j, raw ->
                 val frameIndex = idx + j
-                val times = wanted.count { it == frameIndex } // un video de menos de 15 fps repite cuadros
+                val times = wanted.count { it == frameIndex } // un video con menos fps que el sticker repite cuadros
                 if (times > 0) {
                     val frame = normalize(raw, info)
                     repeat(times) {
@@ -133,11 +125,12 @@ object VideoFrames {
         info: VideoInfo,
         startMs: Long,
         count: Int,
+        fps: Int,
         onProgress: (Float) -> Unit,
         onFrame: (Int, Bitmap) -> Unit,
     ): Int {
         for (i in 0 until count) {
-            val tUs = (startMs * 1000) + i * 1_000_000L / FPS
+            val tUs = (startMs * 1000) + i * 1_000_000L / fps
             val raw = r.getScaledFrameAtTime(tUs, MediaMetadataRetriever.OPTION_CLOSEST, info.workWidth, info.workHeight)
                 ?: error("No se pudo leer el cuadro $i")
             val frame = normalize(raw, info)

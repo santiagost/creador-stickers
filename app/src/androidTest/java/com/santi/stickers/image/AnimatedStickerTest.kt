@@ -22,6 +22,7 @@ import kotlin.random.Random
 /**
  * Spec 003: AC-3, AC-6 y AC-7, con el video de prueba de Santi (D13) y cuadros sintéticos.
  * El video es H.264 1280x720, 60 fps, 4,2 s.
+ * Spec 005: AC-6 (tramo de 10 s) con prueba-12s.mp4 (el mismo video en loop, 640x360, 30 fps, 12 s, generado con ffmpeg).
  */
 @RunWith(AndroidJUnit4::class)
 class AnimatedStickerTest {
@@ -38,7 +39,6 @@ class AnimatedStickerTest {
         assertEquals(720, info.height)
         assertEquals(1024, info.workWidth)
         assertEquals(576, info.workHeight)
-        assertEquals(info.durationMs - VideoFrames.CLIP_MS, VideoFrames.maxStart(info))
     }
 
     @Test
@@ -56,7 +56,7 @@ class AnimatedStickerTest {
         val sizes = mutableSetOf<String>()
         var count = 0
         val t0 = SystemClock.elapsedRealtime()
-        VideoFrames.frames(context, videoUri, info, startMs = 0) { _, f ->
+        VideoFrames.frames(context, videoUri, info, ClipRange(0, 3000)) { _, f ->
             sizes += "${f.width}x${f.height}/${f.config}"
             count++
         }
@@ -66,12 +66,23 @@ class AnimatedStickerTest {
     }
 
     @Test
-    fun ac3_siQuedaMenosDe3s_seUsaHastaElFinal() {
+    fun tramoHastaElFinal_daLosCuadrosDeSuLargo() {
         val info = VideoFrames.info(context, videoUri)
         var count = 0
-        VideoFrames.frames(context, videoUri, info, startMs = 3000) { _, _ -> count++ }
-        val expected = ((info.durationMs - 3000) * VideoFrames.FPS / 1000).toInt()
-        assertEquals(expected, count)
+        val range = ClipRange(3000, info.durationMs - 3000)
+        VideoFrames.frames(context, videoUri, info, range) { _, _ -> count++ }
+        assertEquals(TrimMath.frameCount(range.lengthMs), count)
+    }
+
+    @Test
+    fun ac6_spec005_tramoDe10s_da70CuadrosA7fps() {
+        val info = VideoFrames.info(context, longUri)
+        assertTrue("duración ${info.durationMs}", info.durationMs >= 11_900)
+        var count = 0
+        val t0 = SystemClock.elapsedRealtime()
+        VideoFrames.frames(context, longUri, info, ClipRange(1000, 10_000)) { _, _ -> count++ }
+        Log.i(TAG, "70 cuadros (10 s) en ${SystemClock.elapsedRealtime() - t0} ms")
+        assertEquals(70, count)
     }
 
     @Test
@@ -86,7 +97,7 @@ class AnimatedStickerTest {
 
         val byTime = VideoFrames.frameAt(context, verticalUri, info, 0, exact = true)
         var byIndex: Bitmap? = null
-        VideoFrames.frames(context, verticalUri, info, startMs = 0) { i, f -> if (i == 0) byIndex = f.copy(Bitmap.Config.ARGB_8888, false) }
+        VideoFrames.frames(context, verticalUri, info, ClipRange(0, 3000)) { i, f -> if (i == 0) byIndex = f.copy(Bitmap.Config.ARGB_8888, false) }
         assertEquals(576, byTime.width)
         assertEquals(1024, byTime.height)
         assertEquals(576, byIndex!!.width)
@@ -110,7 +121,7 @@ class AnimatedStickerTest {
         val first = StickerImages.render(VideoFrames.frameAt(context, videoUri, info, 500, exact = true), CropMath.toOutput(crop, frame))
         val t0 = SystemClock.elapsedRealtime()
 
-        val result = AnimatedWebp.fromVideo(context, videoUri, info, startMs = 500, crop = crop, frameSize = frame)
+        val result = AnimatedWebp.fromSource(context, VideoSource(videoUri, info), ClipRange(500, 3000), crop = crop, frameSize = frame)
 
         Log.i(TAG, "video → sticker: $result en ${SystemClock.elapsedRealtime() - t0} ms")
         assertTrue("se esperaba Ok y vino $result", result is AnimatedResult.Ok)
@@ -119,6 +130,36 @@ class AnimatedStickerTest {
         // El primer cuadro del sticker es el primer cuadro del tramo encuadrado.
         val decodedFirst = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         assertSimilar(first, decodedFirst)
+    }
+
+    @Test
+    fun ac6_spec005_tramoDe10s_daUnWebpAnimadoValidoDeHasta75Cuadros() {
+        val info = VideoFrames.info(context, longUri)
+        val frame = info.workWidth.toFloat()
+        val crop = CropMath.cover(info.workWidth, info.workHeight, frame)
+        val t0 = SystemClock.elapsedRealtime()
+
+        val result = AnimatedWebp.fromSource(context, VideoSource(longUri, info), ClipRange(1500, 10_000), crop = crop, frameSize = frame)
+
+        Log.i(TAG, "10 s → sticker: $result en ${SystemClock.elapsedRealtime() - t0} ms")
+        assertTrue("se esperaba Ok y vino $result", result is AnimatedResult.Ok)
+        result as AnimatedResult.Ok
+        assertTrue("fps ${result.fps}", result.fps <= 7)
+        val anim = assertValidAnimated(result.bytes)
+        assertTrue("cuadros ${anim.frameDurations.size}", anim.frameDurations.size <= TrimMath.MAX_FRAMES)
+        assertTrue("dura ${anim.totalMs} ms", anim.totalMs >= 9_000)
+    }
+
+    @Test
+    fun d4_laEscaleraNuncaPasaDeLosFpsDelTramo() {
+        val frames = (0 until 70).map { moving(it % 45) }
+        val result = AnimatedWebp.encode(context, frames, sourceFps = 7)
+        assertTrue("$result", result is AnimatedResult.Ok)
+        result as AnimatedResult.Ok
+        assertEquals(7, result.fps)
+        val info = assertValidAnimated(result.bytes)
+        assertEquals(70, info.frameDurations.size)
+        assertEquals(listOf(142), info.frameDurations.distinct())
     }
 
     @Test
@@ -211,6 +252,7 @@ class AnimatedStickerTest {
         private const val TAG = "AnimatedStickerTest"
         private lateinit var videoUri: Uri
         private lateinit var verticalUri: Uri
+        private lateinit var longUri: Uri
 
         private fun copyAsset(name: String): Uri {
             val inst = InstrumentationRegistry.getInstrumentation()
@@ -224,6 +266,7 @@ class AnimatedStickerTest {
         fun copyVideo() {
             videoUri = copyAsset("prueba.mp4")
             verticalUri = copyAsset("prueba-vertical.mp4")
+            longUri = copyAsset("prueba-12s.mp4")
         }
     }
 }
