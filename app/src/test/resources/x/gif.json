@@ -1,0 +1,22 @@
+{
+ "__typename": "Tweet",
+ "id_str": "2122576566987489513",
+ "mediaDetails": [
+  {
+   "type": "animated_gif",
+   "video_info": {
+    "aspect_ratio": [
+     1,
+     1
+    ],
+    "variants": [
+     {
+      "bitrate": 0,
+      "content_type": "video/mp4",
+      "url": "https://video.twimg.com/tweet_video/HXO7XnoX0AAQqjK.mp4"
+     }
+    ]
+   }
+  }
+ ]
+}

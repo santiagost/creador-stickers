@@ -7,11 +7,10 @@
         <package android:name="com.whatsapp" />
     </queries>
 
-    <!-- Spec 002, D13: ML Kit trae datatransport, que pide red para mandar métricas de uso a Google.
-         La app no necesita internet (el modelo lo baja Play services), así que se quitan. -->
-    <uses-permission
-        android:name="android.permission.INTERNET"
-        tools:node="remove" />
+    <!-- Spec 007, D2: internet solo para bajar videos de links de X. ML Kit trae datatransport, que manda
+         métricas de uso a Google: se le quita el componente que las sube (TransportBackendDiscovery, abajo).
+         ACCESS_NETWORK_STATE sigue quitado (spec 002, D13). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
@@ -48,6 +47,11 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
+
+        <!-- Spec 007, D2: sin este servicio, datatransport no encuentra cómo subir las métricas de ML Kit. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
 
         <!-- Contrato de WhatsApp (spec 001, secciones 8 y 10): exportado, solo lectura con el permiso de WhatsApp. -->
         <provider

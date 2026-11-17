@@ -37,7 +37,12 @@ Santi quiere hacer stickers con videos y GIF de X. La app de X solo comparte el 
 - La dirección de D1 responde (HTTP 200) con dos tweets de video de NASA (Artemis II y Roman): trae `mediaDetails` con `type: "video"`, la duración y los MP4 en 270p, 360p, 720p, 1080p y 4K, más una lista HLS (que no se usa).
 - El MP4 se baja sin cuenta ni encabezados especiales (33 s a 720p = 3,8 MB).
 - Hoy no controla el `token` de la dirección (anda con cualquiera o sin él). Igual se calcula como lo hace el código de los tweets incrustados, por si empieza a controlarlo.
-- **No verificado:** un tweet con "GIF". Según lo que se sabe de X, viene como `type: "animated_gif"` con un solo MP4 sin sonido; se prueba en P0 con un link de Santi.
+- Tweet inexistente: HTTP 404 (página HTML); número inválido: HTTP 400. Ambos caen en RN-6.
+
+**Verificado en P0 (2026-11-17):**
+- Con los links de Santi: el de video viene como `type: "video"` (7,7 s, MP4 de 366x270, 488x360 y 976x720); el "GIF" como `type: "animated_gif"`, con un solo MP4 de `video.twimg.com/tweet_video/…` con bitrate 0 y sin resolución en la dirección (62 KB). RN-4 elige ese único MP4.
+- Con internet y sin `TransportBackendDiscovery` en el S20 FE: "Quitar fondo" anda (5 tests de quitar fondo OK) y datatransport registra `Transport backend 'cct' is not registered`, o sea, descarta las métricas en vez de subirlas. La app no tiene trabajos de subida programados (otras apps del teléfono sí).
+- Para los tests se guardaron las respuestas recortadas (solo el tipo y los videos, sin texto ni usuario) en `app/src/test/resources/x/`.
 
 ## 5. Reglas de negocio
 
@@ -103,9 +108,9 @@ object XDownloader {
 
 | Parte | Contenido | Tests | ACs |
 |---|---|---|---|
-| P0 | Prueba en el teléfono: quitar el componente de métricas y comprobar que "Quitar fondo" anda; leer un tweet con "GIF" (link de Santi) desde la PC. Se anota el resultado acá. | Manual + los instrumentados de quitar fondo. | AC-7 |
+| P0 | Manifest (internet y quitar el componente de métricas) y prueba en el teléfono de que "Quitar fondo" anda; leer un tweet con "GIF" (link de Santi) desde la PC. Se anota el resultado acá. | Manual + los instrumentados de quitar fondo. | AC-7 |
 | P1 | `XLinks`: link → número, token, elección del video desde el JSON (con respuestas guardadas de la prueba). | Unitarios. | RN-1 a RN-4 |
-| P2 | `XDownloader` + manifest (internet, recibir texto). | Instrumentado contra X real (un tweet de NASA), marcado como "necesita internet". | AC-6, AC-8 |
+| P2 | `XDownloader` + recibir texto en el manifest. | Instrumentado contra X real (un tweet de NASA), marcado como "necesita internet". | AC-6, AC-8 |
 | P3 | UI: "Bajando video…", recibir texto, "Pegar link de X". Un commit cuando Santi confirme. | Manual con los ACs. | AC-1 a AC-5 |
 
 ## 13. Riesgos
