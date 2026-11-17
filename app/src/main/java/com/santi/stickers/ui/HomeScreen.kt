@@ -144,7 +144,7 @@ private fun NewPackDialog(
         title = { Text("Nuevo pack") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                listOf(false to "Normal (fotos)", true to "Animado (videos)").forEach { (value, label) ->
+                listOf(false to "Normal (fotos)", true to "Animado (videos o GIF)").forEach { (value, label) ->
                     Row(
                         Modifier.fillMaxWidth().selectable(selected = animated == value) {
                             animated = value
@@ -169,6 +169,23 @@ private fun NewPackDialog(
             }
         },
         confirmButton = { TextButton(onClick = { onCreate(name, animated) }, enabled = valid) { Text("Crear") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+/** Spec 005, D2: en un pack animado, el sticker nuevo sale de un video o de un GIF. */
+@Composable
+fun AnimatedSourceDialog(onVideo: () -> Unit, onGif: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nuevo sticker animado") },
+        text = { Text("¿Desde dónde?") },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onVideo) { Text("Video") }
+                TextButton(onClick = onGif) { Text("GIF") }
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }
@@ -216,7 +233,7 @@ fun PackScreen(
             WhatsAppButton(status, onSendToWhatsApp)
             if (pack.stickers.isEmpty()) {
                 Text(
-                    if (pack.animated) "Todavía no tiene stickers. Creá uno desde un video." else "Todavía no tiene stickers. Creá uno desde una foto.",
+                    if (pack.animated) "Todavía no tiene stickers. Creá uno desde un video o un GIF." else "Todavía no tiene stickers. Creá uno desde una foto.",
                     modifier = Modifier.padding(vertical = 32.dp).fillMaxWidth(),
                     textAlign = TextAlign.Center,
                 )

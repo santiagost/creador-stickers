@@ -121,7 +121,7 @@ class AnimatedStickerTest {
         val first = StickerImages.render(VideoFrames.frameAt(context, videoUri, info, 500, exact = true), CropMath.toOutput(crop, frame))
         val t0 = SystemClock.elapsedRealtime()
 
-        val result = AnimatedWebp.fromVideo(context, videoUri, info, ClipRange(500, 3000), crop = crop, frameSize = frame)
+        val result = AnimatedWebp.fromSource(context, VideoSource(videoUri, info), ClipRange(500, 3000), crop = crop, frameSize = frame)
 
         Log.i(TAG, "video → sticker: $result en ${SystemClock.elapsedRealtime() - t0} ms")
         assertTrue("se esperaba Ok y vino $result", result is AnimatedResult.Ok)
@@ -139,7 +139,7 @@ class AnimatedStickerTest {
         val crop = CropMath.cover(info.workWidth, info.workHeight, frame)
         val t0 = SystemClock.elapsedRealtime()
 
-        val result = AnimatedWebp.fromVideo(context, longUri, info, ClipRange(1500, 10_000), crop = crop, frameSize = frame)
+        val result = AnimatedWebp.fromSource(context, VideoSource(longUri, info), ClipRange(1500, 10_000), crop = crop, frameSize = frame)
 
         Log.i(TAG, "10 s → sticker: $result en ${SystemClock.elapsedRealtime() - t0} ms")
         assertTrue("se esperaba Ok y vino $result", result is AnimatedResult.Ok)

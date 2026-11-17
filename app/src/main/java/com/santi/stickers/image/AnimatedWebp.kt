@@ -78,13 +78,12 @@ object AnimatedWebp {
     }
 
     /**
-     * Video → sticker: lee el tramo, encuadra cada cuadro con [crop] (calculado en un cuadro de [frameSize]
+     * Video o GIF → sticker: lee el tramo, encuadra cada cuadro con [crop] (calculado en un cuadro de [frameSize]
      * sobre el tamaño de trabajo, D7) y lo codifica. El progreso va de 0 a 0,4 leyendo y de 0,4 a 1 codificando.
      */
-    fun fromVideo(
+    fun fromSource(
         context: Context,
-        uri: Uri,
-        info: VideoInfo,
+        source: AnimationSource,
         range: ClipRange,
         crop: CropTransform,
         frameSize: Float,
@@ -93,7 +92,7 @@ object AnimatedWebp {
         val out = CropMath.toOutput(crop, frameSize)
         val rendered = ArrayList<Bitmap>(TrimMath.frameCount(range.lengthMs))
         try {
-            VideoFrames.frames(context, uri, info, range, onProgress = { onProgress(it * 0.4f) }) { _, frame ->
+            source.frames(context, range, onProgress = { onProgress(it * 0.4f) }) { _, frame ->
                 rendered += StickerImages.render(frame, out)
             }
             return encode(context, rendered, sourceFps = TrimMath.fpsFor(range.lengthMs)) { onProgress(0.4f + it * 0.6f) }

@@ -19,9 +19,13 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.santi.stickers.data.Packs
+import com.santi.stickers.ui.AnimatedSourceDialog
 import com.santi.stickers.ui.CropScreen
 import com.santi.stickers.ui.HomeScreen
 import com.santi.stickers.ui.MainViewModel
@@ -73,6 +77,11 @@ private fun App(viewModel: MainViewModel) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let(viewModel::startVideo)
     }
+    // Spec 005, D2: el mismo selector, solo GIFs.
+    val pickGif = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let(viewModel::startGif)
+    }
+    val pickers = Pickers(pickPhoto, pickVideo, pickGif)
     val sendToWhatsApp = rememberLauncherForActivityResult(AddStickerPackContract(), viewModel::onWhatsAppResult)
 
     when (val screen = viewModel.screen) {
@@ -93,9 +102,9 @@ private fun App(viewModel: MainViewModel) {
                     viewModel.closePack()
                     return
                 }
-                PackScreenFor(PackStatus(pack, SyncState.NOT_ADDED), repository, snackbar, viewModel, pickPhoto, pickVideo, sendToWhatsApp)
+                PackScreenFor(PackStatus(pack, SyncState.NOT_ADDED), repository, snackbar, viewModel, pickers, sendToWhatsApp)
             } else {
-                PackScreenFor(status, repository, snackbar, viewModel, pickPhoto, pickVideo, sendToWhatsApp)
+                PackScreenFor(status, repository, snackbar, viewModel, pickers, sendToWhatsApp)
             }
         }
         is Screen.Crop -> CropScreen(
@@ -110,12 +119,18 @@ private fun App(viewModel: MainViewModel) {
         )
         is Screen.Trim -> TrimScreen(
             state = screen,
-            onStartChange = viewModel::setTrimStart,
+            onRangeChange = viewModel::setTrimRange,
             onCancel = viewModel::cancelTrim,
             onNext = viewModel::confirmTrim,
         )
     }
 }
+
+private class Pickers(
+    val photo: ActivityResultLauncher<PickVisualMediaRequest>,
+    val video: ActivityResultLauncher<PickVisualMediaRequest>,
+    val gif: ActivityResultLauncher<PickVisualMediaRequest>,
+)
 
 @Composable
 private fun PackScreenFor(
@@ -123,23 +138,37 @@ private fun PackScreenFor(
     repository: PackRepository,
     snackbar: SnackbarHostState,
     viewModel: MainViewModel,
-    pickPhoto: ActivityResultLauncher<PickVisualMediaRequest>,
-    pickVideo: ActivityResultLauncher<PickVisualMediaRequest>,
+    pickers: Pickers,
     sendToWhatsApp: ActivityResultLauncher<AddPackRequest>,
 ) {
     val packId = status.pack.identifier
+    var choosingSource by remember { mutableStateOf(false) }
+    if (choosingSource) {
+        // Spec 005, D2 y AC-1.
+        AnimatedSourceDialog(
+            onVideo = {
+                choosingSource = false
+                pickers.video.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+            },
+            onGif = {
+                choosingSource = false
+                pickers.gif.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.SingleMimeType("image/gif")))
+            },
+            onDismiss = { choosingSource = false },
+        )
+    }
     PackScreen(
         status = status,
         dir = repository.packDir(packId),
         snackbar = snackbar,
         onBack = viewModel::closePack,
         onNewSticker = {
-            // Spec 004, AC-5: normal → fotos; animado → videos (D6).
+            // Spec 004, AC-5: normal → fotos; animado → "Video" o "GIF" (spec 005, D2).
             viewModel.tryStartNewSticker(packId) { animated ->
                 if (animated) {
-                    pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                    choosingSource = true
                 } else {
-                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    pickers.photo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
             }
         },

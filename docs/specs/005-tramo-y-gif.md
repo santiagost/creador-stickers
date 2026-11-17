@@ -116,3 +116,4 @@ Ninguna.
 | 2026-11-10 | "GIF como fuente de animados y elegir el tramo, como en varias apps que el tramo inical sea de 5s (o la duracion maxima que permita WA) y se pueda mover esa "caja" de 5seg a lo largo del video para seleccionar el trozo, tambien que esa caja se pueda achicar hasta 2 o 3 segundos." | Esta spec. |
 | 2026-11-10 | P5: "Maximo 10s y minimo 2s" / P6: "Dale, hacemos que permita selector entre gif y videos" | D1, D2. |
 | 2026-11-13 | "Sí, aprobada" (con D3 a D6 como estaban) | Estado: aprobada; D3 a D6 confirmadas. |
+| 2026-11-17 | Después de probarlo: "Todo bien, commiteá" | P3 (caja de tramo y menú Video/GIF) commiteada. Verificado: 75 tests unitarios y 45 instrumentados en el S20 FE. |
