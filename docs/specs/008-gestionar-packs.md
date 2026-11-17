@@ -110,3 +110,4 @@ Ninguna.
 | 2026-11-17 | "Sí, todas" (las 6 recomendaciones) | D1 a D4; reordenar fuera. |
 | 2026-11-17 | Prueba: "Nombre nuevo" / "Sigue ahi el pack y puedo enviar los stickers, lo puedo borrar desde WA" | Sección 4 (verificado) y D2. |
 | 2026-11-17 | "Sí, aprobada" (con D5 como estaba) | Estado: aprobada; D5 confirmada. |
+| 2026-11-17 | Prueba de P2: "Lo estuve probando y la verdad sin problemas hasta ahora" | P2 commiteada. |

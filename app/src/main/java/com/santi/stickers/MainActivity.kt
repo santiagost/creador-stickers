@@ -245,6 +245,8 @@ private fun PackScreenFor(
             }
         },
         onDelete = { file -> viewModel.deleteSticker(packId, file) },
+        onRename = { name -> viewModel.renamePack(packId, name) },
+        onDeletePack = { viewModel.deletePack(packId) },
     )
 }
 
