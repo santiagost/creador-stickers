@@ -43,6 +43,14 @@ object TrimMath {
     fun fpsFor(lengthMs: Long): Int =
         if (lengthMs <= MAX_FRAMES * 1000L / BASE_FPS) BASE_FPS else (MAX_FRAMES * 1000L / lengthMs).toInt().coerceAtLeast(1)
 
+    /** Spec 009, RN-1, RN-2: momento de la línea, que está en [cursor] (0 a 1) dentro de la caja. */
+    fun cursorMs(range: ClipRange, cursor: Float): Long =
+        range.startMs + (range.lengthMs * cursor.coerceIn(0f, 1f)).toLong()
+
+    /** Spec 009, RN-1: lugar de la línea después de arrastrarla [deltaMs] desde [origin]; nunca sale de la caja. */
+    fun dragCursor(range: ClipRange, origin: Float, deltaMs: Long): Float =
+        if (range.lengthMs <= 0) 0f else (origin.coerceIn(0f, 1f) + deltaMs.toFloat() / range.lengthMs).coerceIn(0f, 1f)
+
     /** Cuadros que va a tener el sticker de un tramo de [lengthMs]. */
     fun frameCount(lengthMs: Long): Int = (lengthMs * fpsFor(lengthMs) / 1000).toInt()
 }
