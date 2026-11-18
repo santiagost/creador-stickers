@@ -122,3 +122,4 @@ Ninguna.
 | 2026-11-17 | "Dale, vamos con packs. Una cosa al de las miniaturas al inicio le agregaria la linea entre medio del bloque elegible para ir moviendo hacia adelante o atras para ver que parte del video contiene" | Esta spec. |
 | 2026-11-17 | "1. Dale, hagamos asi 2. Estoy de acuerdo 3. Estoy de acuerdo 4. Siempre 5. Dale, no creo que use gif largos" | D1 a D5. |
 | 2026-11-17 | "Sí, aprobada" | Estado: aprobada; D6 y D7 confirmadas. |
+| 2026-11-18 | Prueba de P2: "Todo bien, commiteá" | P2 commiteada. |

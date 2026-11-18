@@ -175,6 +175,7 @@ private fun App(viewModel: MainViewModel) {
         is Screen.Trim -> TrimScreen(
             state = screen,
             onRangeChange = viewModel::setTrimRange,
+            onCursorChange = viewModel::setTrimCursor,
             onCancel = viewModel::cancelTrim,
             onNext = viewModel::confirmTrim,
         )
