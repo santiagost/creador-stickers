@@ -103,4 +103,36 @@ class TrimMathTest {
         assertEquals(15, TrimMath.frameCount(1000))
         assertEquals(1, TrimMath.frameCount(100)) // menos de 2: el ViewModel lo rechaza (RN-2)
     }
+
+    // --- Línea dentro de la caja (spec 009) ---
+
+    @Test
+    fun `009 RN-2 la linea esta en inicio mas lugar por largo`() {
+        assertEquals(10_000L, TrimMath.cursorMs(r(10_000, 4000), 0f)) // D3: al principio
+        assertEquals(12_000L, TrimMath.cursorMs(r(10_000, 4000), 0.5f))
+        assertEquals(14_000L, TrimMath.cursorMs(r(10_000, 4000), 1f))
+    }
+
+    @Test
+    fun `009 RN-1 arrastrar la linea la mueve y no sale de la caja`() {
+        assertEquals(0.25f, TrimMath.dragCursor(r(10_000, 4000), 0f, 1000), 1e-6f)
+        assertEquals(0.75f, TrimMath.dragCursor(r(10_000, 4000), 1f, -1000), 1e-6f)
+        assertEquals(1f, TrimMath.dragCursor(r(10_000, 4000), 0.5f, 60_000), 0f)
+        assertEquals(0f, TrimMath.dragCursor(r(10_000, 4000), 0.5f, -60_000), 0f)
+    }
+
+    @Test
+    fun `009 RN-3 mover la caja o cambiar su largo mantiene el lugar relativo`() {
+        val cursor = 0.5f
+        val moved = TrimMath.move(r(10_000, 4000), 3000, 30_000)
+        assertEquals(15_000L, TrimMath.cursorMs(moved, cursor))
+        val longer = TrimMath.resizeEnd(r(10_000, 4000), 4000, 30_000)
+        assertEquals(14_000L, TrimMath.cursorMs(longer, cursor))
+    }
+
+    @Test
+    fun `009 RN-1 un lugar fuera de rango se acota`() {
+        assertEquals(14_000L, TrimMath.cursorMs(r(10_000, 4000), 1.5f))
+        assertEquals(10_000L, TrimMath.cursorMs(r(10_000, 4000), -1f))
+    }
 }

@@ -84,8 +84,13 @@ sealed interface Screen {
         val shown: Bitmap? get() = if (showSubject) removal?.subject else photo
     }
 
-    /** Spec 003/005: elegir el tramo. [preview] es el cuadro donde arranca; null mientras carga. */
-    data class Trim(val source: AnimationSource, val range: ClipRange, val preview: Bitmap?) : Screen
+    /**
+     * Spec 003/005/009: elegir el tramo. [cursor] es el lugar de la línea dentro de la caja (0 a 1);
+     * [preview] es el cuadro en la línea, null mientras carga.
+     */
+    data class Trim(val source: AnimationSource, val range: ClipRange, val preview: Bitmap?, val cursor: Float = 0f) : Screen {
+        val cursorMs get() = TrimMath.cursorMs(range, cursor)
+    }
 }
 
 /** Spec 003: el tramo elegido de un video. */
@@ -377,8 +382,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setTrimRange(range: ClipRange, exact: Boolean) {
         val trim = screen as? Screen.Trim ?: return
-        screen = trim.copy(range = range)
-        if (exact || range.startMs != trim.range.startMs) loadTrimPreview(exact)
+        val next = trim.copy(range = range)
+        screen = next
+        // Spec 009, RN-3: la línea acompaña a la caja, así que su cuadro cambia si cambia su momento.
+        if (exact || next.cursorMs != trim.cursorMs) loadTrimPreview(exact)
+    }
+
+    /** Spec 009, AC-5, D7: mover la línea; mientras se arrastra, cuadro rápido; al soltar, el exacto. */
+    fun setTrimCursor(cursor: Float, exact: Boolean) {
+        val trim = screen as? Screen.Trim ?: return
+        val next = trim.copy(cursor = cursor.coerceIn(0f, 1f))
+        screen = next
+        if (exact || next.cursorMs != trim.cursorMs) loadTrimPreview(exact)
     }
 
     /** Los cuadros de muestra se leen de a uno; si llega otro pedido, los que esperaban se descartan. */
@@ -390,10 +405,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         trimPreviewJob = viewModelScope.launch {
             val context = getApplication<Application>()
             val frame = withContext(previewDispatcher) {
-                runCatching { trim.source.frameAt(context, trim.range.startMs, exact) }.getOrNull()
+                runCatching { trim.source.frameAt(context, trim.cursorMs, exact) }.getOrNull()
             } ?: return@launch
             val current = screen as? Screen.Trim ?: return@launch
-            if (current.source == trim.source && current.range.startMs == trim.range.startMs) screen = current.copy(preview = frame)
+            if (current.source == trim.source && current.cursorMs == trim.cursorMs) screen = current.copy(preview = frame)
         }
     }
 
