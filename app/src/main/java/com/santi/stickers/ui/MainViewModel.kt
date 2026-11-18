@@ -13,10 +13,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.santi.stickers.data.AddResult
 import com.santi.stickers.data.CreatePackResult
+import com.santi.stickers.data.DeletePackResult
 import com.santi.stickers.data.DeleteResult
 import com.santi.stickers.data.PackRules
 import com.santi.stickers.data.PackStatus
 import com.santi.stickers.data.Packs
+import com.santi.stickers.data.RenameResult
 import com.santi.stickers.data.packStatuses
 import com.santi.stickers.image.AnimatedResult
 import com.santi.stickers.image.AnimationSource
@@ -160,6 +162,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 CreatePackResult.InvalidName -> message("El nombre no puede estar vacío ni pasar de ${PackRules.MAX_NAME_LENGTH} letras.")
             }
             refresh()
+        }
+    }
+
+    /** Spec 008, RN-1, RN-2. */
+    fun deletePack(packId: String) {
+        viewModelScope.launch {
+            when (val r = withContext(Dispatchers.IO) { repository.deletePack(packId) }) {
+                is DeletePackResult.Deleted -> {
+                    screen = Screen.Home
+                    message("Pack \"${r.pack.name}\" borrado.")
+                }
+                DeletePackResult.NotFound -> screen = Screen.Home
+            }
+            refresh()
+        }
+    }
+
+    /** Spec 008, D3, AC-4, AC-5. */
+    fun renamePack(packId: String, name: String) {
+        viewModelScope.launch {
+            when (withContext(Dispatchers.IO) { repository.renamePack(packId, name) }) {
+                is RenameResult.Renamed -> refresh()
+                RenameResult.InvalidName -> message("El nombre no puede estar vacío ni pasar de ${PackRules.MAX_NAME_LENGTH} letras.")
+                RenameResult.Unchanged, RenameResult.NotFound -> Unit
+            }
         }
     }
 

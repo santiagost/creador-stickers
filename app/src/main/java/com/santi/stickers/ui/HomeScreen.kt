@@ -25,6 +25,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -284,16 +286,37 @@ fun PackScreen(
     onNewSticker: () -> Unit,
     onSendToWhatsApp: () -> Unit,
     onDelete: (file: String) -> Unit,
+    onRename: (name: String) -> Unit,
+    onDeletePack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     val pack = status.pack
     var toDelete by remember { mutableStateOf<DeleteTarget?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    var deletingPack by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 navigationIcon = { TextButton(onClick = onBack) { Text("←", style = MaterialTheme.typography.titleLarge) } },
                 title = { Text(packTitle(pack)) },
+                actions = {
+                    // Spec 008, sección 11.
+                    Box {
+                        TextButton(onClick = { menuOpen = true }) { Text("⋮", style = MaterialTheme.typography.titleLarge) }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(text = { Text("Renombrar") }, onClick = {
+                                menuOpen = false
+                                renaming = true
+                            })
+                            DropdownMenuItem(text = { Text("Borrar pack") }, onClick = {
+                                menuOpen = false
+                                deletingPack = true
+                            })
+                        }
+                    }
+                },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -340,6 +363,43 @@ fun PackScreen(
         }
     }
 
+    if (renaming) {
+        RenamePackDialog(
+            current = pack.name,
+            onDismiss = { renaming = false },
+            onSave = {
+                renaming = false
+                onRename(it)
+            },
+        )
+    }
+
+    if (deletingPack) {
+        // Spec 008, D1, D2, AC-2, AC-3.
+        val count = pack.stickers.size
+        val stickers = if (count == 1) "su único sticker" else "sus $count stickers"
+        AlertDialog(
+            onDismissRequest = { deletingPack = false },
+            title = { Text("¿Borrar \"${pack.name}\"?") },
+            text = {
+                Text(
+                    buildString {
+                        append(if (count == 0) "El pack está vacío." else "Se borran $stickers.")
+                        append(" No se puede deshacer.")
+                        if (pack.everAdded) append("\n\nVa a seguir en WhatsApp: quitalo desde ahí (Ajustes → Chats → Stickers).")
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingPack = false
+                    onDeletePack()
+                }) { Text("Borrar") }
+            },
+            dismissButton = { TextButton(onClick = { deletingPack = false }) { Text("Cancelar") } },
+        )
+    }
+
     toDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
@@ -353,6 +413,28 @@ fun PackScreen(
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancelar") } },
         )
     }
+}
+
+/** Spec 008, D3: mismas reglas que al crear. */
+@Composable
+private fun RenamePackDialog(current: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var name by remember { mutableStateOf(current) }
+    val valid = name.trim().isNotEmpty() && name.trim().length <= PackRules.MAX_NAME_LENGTH
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Renombrar pack") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(PackRules.MAX_NAME_LENGTH) },
+                label = { Text("Nombre") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSave(name) }, enabled = valid) { Text("Guardar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }
 
 @Composable

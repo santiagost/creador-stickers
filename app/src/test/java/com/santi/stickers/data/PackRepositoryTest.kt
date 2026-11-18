@@ -227,6 +227,74 @@ class PackRepositoryTest {
         assertEquals(before, repo.load())
     }
 
+    // --- Borrar y renombrar packs (spec 008) ---
+
+    @Test
+    fun `AC-1 spec 008 borrar un pack lo saca de la lista, borra su carpeta y no toca los demas`() {
+        val a = create("A")
+        val b = create("B", animated = true)
+        addMany(a.identifier, 3)
+        add(b.identifier)
+        val r = repo.deletePack(a.identifier)
+        assertEquals("A", (r as DeletePackResult.Deleted).pack.name)
+        assertEquals(listOf("B"), repo.load().packs.map { it.name })
+        assertFalse(File(root, a.identifier).exists())
+        assertTrue(File(root, "${b.identifier}/s4.webp").exists())
+        assertTrue(repo.canCreatePack())
+    }
+
+    @Test
+    fun `AC-6 spec 008 un pack nuevo despues de borrar no reutiliza el numero`() {
+        val a = create("A")
+        repo.deletePack(a.identifier)
+        assertEquals("pack_2", create("B").identifier)
+    }
+
+    @Test
+    fun `spec 008 borrar un pack que no existe no cambia nada`() {
+        create()
+        val before = repo.load()
+        assertEquals(DeletePackResult.NotFound, repo.deletePack("pack_9"))
+        assertEquals(before, repo.load())
+    }
+
+    @Test
+    fun `D5 spec 008 al borrar tambien se van las carpetas de packs que ya no estan en la lista`() {
+        val a = create("A")
+        val b = create("B")
+        add(b.identifier)
+        val orphan = File(root, "pack_77").apply { mkdirs() }
+        File(orphan, "s1.webp").writeText("resto")
+        val notAPack = File(root, "otra-cosa").apply { mkdirs() }
+        repo.deletePack(a.identifier)
+        assertFalse(orphan.exists())
+        assertTrue("solo se borran carpetas pack_N", notAPack.exists())
+        assertTrue(File(root, "${b.identifier}/s1.webp").exists())
+    }
+
+    @Test
+    fun `D3 spec 008 renombrar cambia el nombre y sube la version`() {
+        val p = create("Viejo")
+        addMany(p.identifier, 3)
+        repo.confirmAdded(p.identifier, sentVersion = 3)
+        val r = repo.renamePack(p.identifier, "  Nuevo  ") as RenameResult.Renamed
+        assertEquals("Nuevo", r.pack.name)
+        assertEquals("Nuevo", pack(p.identifier).name)
+        assertEquals(4, pack(p.identifier).imageDataVersion)
+        assertEquals(SyncState.NEEDS_UPDATE, pack(p.identifier).syncState(whitelisted = true))
+    }
+
+    @Test
+    fun `AC-5 spec 008 nombre invalido o igual no cambia nada`() {
+        val p = create("Igual")
+        val before = repo.load()
+        assertEquals(RenameResult.InvalidName, repo.renamePack(p.identifier, "   "))
+        assertEquals(RenameResult.InvalidName, repo.renamePack(p.identifier, "x".repeat(129)))
+        assertEquals(RenameResult.Unchanged, repo.renamePack(p.identifier, " Igual "))
+        assertEquals(RenameResult.NotFound, repo.renamePack("pack_9", "Otro"))
+        assertEquals(before, repo.load())
+    }
+
     // --- Confirmación de WhatsApp ---
 
     @Test
